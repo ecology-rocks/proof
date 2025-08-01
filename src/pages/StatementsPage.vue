@@ -5,11 +5,17 @@
       <q-btn label="Add Statement" color="primary" @click="openFormDialog()" />
     </div>
 
+    <q-input v-model="searchTerm" label="Search statements..." outlined dense clearable class="q-mb-md">
+      <template v-slot:append>
+        <q-icon name="search" />
+      </template>
+    </q-input>
+
     <div v-if="statements.length === 0" class="text-center text-grey q-mt-lg">
       No statements created yet.
     </div>
     <q-list v-else bordered separator>
-      <q-item v-for="statement in statements" :key="statement.id">
+      <q-item v-for="statement in filteredStatements" :key="statement.id">
         <q-item-section>
           <q-item-label>{{ statement.content }}</q-item-label>
         </q-item-section>
@@ -57,6 +63,19 @@ const statements = ref([]);
 const isFormDialogOpen = ref(false);
 const formData = ref({ content: '' });
 const editingStatementId = ref(null); // Will hold the ID of the statement being edited
+const searchTerm = ref('');
+
+
+// 3. Add a computed property to filter the statements
+const filteredStatements = computed(() => {
+  if (!searchTerm.value) {
+    return statements.value;
+  }
+  const lowerCaseSearch = searchTerm.value.toLowerCase();
+  return statements.value.filter(statement =>
+    statement.content.toLowerCase().includes(lowerCaseSearch)
+  );
+});
 
 // A computed property to dynamically set the dialog title
 const formTitle = computed(() => editingStatementId.value ? 'Edit Statement' : 'New Statement');

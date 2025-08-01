@@ -5,12 +5,18 @@
       <q-btn label="Refresh" color="secondary" @click="fetchReferences" class="q-ml-sm" />
     </div>
 
+    <q-input v-model="searchTerm" label="Search by title or author..." outlined dense clearable class="q-mb-md">
+      <template v-slot:append>
+        <q-icon name="search" />
+      </template>
+    </q-input>
+
     <h5>References</h5>
     <div v-if="references.length === 0" class="text-grey">
       No references found. Add one to get started.
     </div>
     <q-list v-else bordered separator>
-      <q-item v-for="ref in references" :key="ref.id">
+      <q-item v-for="ref in filteredReferences" :key="ref.id">
         <q-item-section>
           <q-item-label>{{ ref.title }}</q-item-label>
           <q-item-label caption>{{ ref.author }} ({{ ref.year }})</q-item-label>
@@ -32,26 +38,40 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue'; // 1. Import computed
 import { useQuasar } from 'quasar';
 import AddReferenceDialog from 'src/components/AddReferenceDialog.vue';
 
 const $q = useQuasar();
 const references = ref([]);
-// --- Refactor Start ---
 const isFormDialogOpen = ref(false);
-const editingReference = ref(null); // Will hold the reference being edited
+const editingReference = ref(null);
+const searchTerm = ref(''); // 2. Add a ref for the search term
+
+// 3. Add a computed property to filter the references
+const filteredReferences = computed(() => {
+  if (!searchTerm.value) {
+    return references.value;
+  }
+  const lowerCaseSearch = searchTerm.value.toLowerCase();
+  return references.value.filter(ref => {
+    const titleMatch = ref.title.toLowerCase().includes(lowerCaseSearch);
+    const authorMatch = ref.author && ref.author.toLowerCase().includes(lowerCaseSearch);
+    // Add this line to check the year
+    const yearMatch = ref.year && String(ref.year).includes(searchTerm.value);
+
+    return titleMatch || authorMatch || yearMatch;
+  });
+});
 
 async function fetchReferences() {
   references.value = await window.db.getAllReferences();
 }
 
-// This function now handles opening the dialog for both modes
 function openFormDialog(reference = null) {
   editingReference.value = reference;
   isFormDialogOpen.value = true;
 }
-// --- Refactor End ---
 
 async function confirmDelete(reference) {
   $q.dialog({

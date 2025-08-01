@@ -4,12 +4,19 @@
       <div class="text-h5">All Evidence</div>
     </div>
 
+    <q-input v-model="searchTerm" label="Search evidence or source title..." outlined dense clearable class="q-mb-md">
+      <template v-slot:append>
+        <q-icon name="search" />
+      </template>
+    </q-input>
+
+
     <div v-if="evidenceList.length === 0" class="text-center text-grey q-mt-lg">
       No evidence has been collected yet.
     </div>
 
     <q-list v-else bordered separator>
-      <q-item v-for="item in evidenceList" :key="item.id">
+      <q-item v-for="item in filteredEvidenceList" :key="item.id">
         <q-item-section>
           <q-item-label class="text-body1">"{{ item.content }}"</q-item-label>
           <q-item-label caption>
@@ -27,11 +34,26 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue'; // 1. Import computed
 import { useQuasar } from 'quasar';
 
 const $q = useQuasar();
 const evidenceList = ref([]);
+const searchTerm = ref(''); // 2. Add a ref for the search term
+
+// 3. Add a computed property to filter the evidence
+const filteredEvidenceList = computed(() => {
+  if (!searchTerm.value) {
+    return evidenceList.value;
+  }
+  const lowerCaseSearch = searchTerm.value.toLowerCase();
+  return evidenceList.value.filter(item => {
+    const contentMatch = item.content.toLowerCase().includes(lowerCaseSearch);
+    const titleMatch = item.referenceTitle.toLowerCase().includes(lowerCaseSearch);
+    return contentMatch || titleMatch;
+  });
+});
+
 
 async function fetchAllEvidence() {
   const result = await window.db.getAllEvidence();
