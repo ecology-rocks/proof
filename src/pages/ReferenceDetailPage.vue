@@ -6,6 +6,29 @@
       <div class="text-h4">{{ reference.title }}</div>
       <div class="text-subtitle1 text-grey">{{ reference.author }} ({{ reference.year }})</div>
 
+      <q-card flat bordered class="q-my-md">
+        <q-card-section>
+          <div class="text-h6">Details</div>
+        </q-card-section>
+        <q-separator />
+        <q-card-section class="q-gutter-sm">
+          <div v-if="reference.entry_type"><strong>Type:</strong> {{ reference.entry_type }}</div>
+          <div v-if="reference.publisher"><strong>Publisher:</strong> {{ reference.publisher }}</div>
+          <div v-if="reference.journal"><strong>Journal:</strong> {{ reference.journal }}</div>
+          <div v-if="reference.volume"><strong>Volume:</strong> {{ reference.volume }}</div>
+          <div v-if="reference.pages"><strong>Pages:</strong> {{ reference.pages }}</div>
+          <div v-if="reference.doi"><strong>DOI:</strong> {{ reference.doi }}</div>
+          <div v-if="reference.url"><strong>URL:</strong> <a :href="reference.url" target="_blank">{{ reference.url
+              }}</a></div>
+          <div v-if="reference.notes" class="q-mt-md">
+            <strong>Notes:</strong>
+            <div class="text-body2" style="white-space: pre-wrap;">
+              <div v-html="reference.notes"></div>
+            </div>
+          </div>
+        </q-card-section>
+      </q-card>
+
       <q-separator class="q-my-md" />
 
       <div class="row items-center justify-between q-mb-md">
@@ -19,10 +42,11 @@
       <q-list v-else bordered separator>
         <q-item v-for="item in evidenceList" :key="item.id">
           <q-item-section>
-            <q-item-label class="text-body1">"{{ item.content }}"</q-item-label>
+            <q-item-label class="text-body1">
+              <div v-html="item.content"></div>
+            </q-item-label>
             <q-item-label caption v-if="item.page_number">Page: {{ item.page_number }}</q-item-label>
           </q-item-section>
-
           <q-item-section side>
             <div class="row">
               <q-btn icon="edit" flat round color="grey" @click="openEvidenceForm(item)" />
@@ -33,6 +57,7 @@
       </q-list>
 
     </div>
+
     <div v-else class="text-center">
       <q-spinner-dots color="primary" size="40px" />
       <p>Loading reference...</p>

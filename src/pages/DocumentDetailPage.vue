@@ -1,15 +1,22 @@
 <template>
   <q-page class="q-pa-md">
-    <q-btn flat round dense icon="arrow_back" @click="goBack" class="q-mb-md" aria-label="Back" />
+
     <div v-if="document">
+      <q-btn flat round dense icon="arrow_back" @click="goBack" class="q-mb-md" aria-label="Back" />
       <div class="text-h4 q-mb-md">{{ document.title }}</div>
-      <div class="text-body1 q-mb-md" v-if="document.content">{{ document.content }}</div>
+      <div class="text-subtitle1 text-grey-7 q-mb-md" v-if="document.excerpt">
+        <div v-html="document.excerpt"></div>
+      </div>
+      <div class="text-body1 q-mb-md" v-if="document.content">
+        <div v-html="document.content"></div>
+      </div>
 
       <q-separator class="q-my-md" />
 
       <div class="row items-center justify-between q-mb-md">
         <div class="text-h6">Statements</div>
         <q-btn label="Arrange Statements" color="primary" @click="isArrangeDialogOpen = true" />
+        <q-btn label="Export to Markdown" icon="download" color="secondary" @click="exportDocument" class="q-ml-sm" />
       </div>
 
       <div v-if="linkedStatements.length === 0" class="text-center text-grey q-mt-lg">
@@ -40,8 +47,10 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useQuasar } from 'quasar';
 import ArrangeStatementsDialog from 'src/components/ArrangeStatementsDialog.vue';
 
+const $q = useQuasar();
 const route = useRoute();
 const router = useRouter();
 const document = ref(null);
@@ -63,6 +72,26 @@ async function fetchDetails() {
     linkedStatements.value = result.statements;
   }
 }
+
+async function exportDocument() {
+  if (!document.value) return;
+
+  const result = await window.db.exportDocumentAsMarkdown(document.value.id);
+
+  if (result.success) {
+    $q.notify({
+      type: 'positive',
+      message: `Document exported successfully to ${result.path}`,
+      timeout: 5000 // Keep the message on screen a bit longer
+    });
+  } else if (!result.cancelled) {
+    $q.notify({
+      type: 'negative',
+      message: 'An error occurred during export.'
+    });
+  }
+}
+
 
 onMounted(() => {
   fetchDetails();

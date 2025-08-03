@@ -4,7 +4,7 @@
     <div v-if="evidence">
       <div class="text-h6">Evidence</div>
       <blockquote class="text-h5 q-my-md q-pl-md" style="border-left: 4px solid #ccc;">
-        "{{ evidence.content }}"
+        <div v-html="evidence.content"></div>
       </blockquote>
 
       <div class="q-mb-xl">

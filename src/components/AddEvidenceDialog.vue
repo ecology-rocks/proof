@@ -9,6 +9,12 @@
                 <q-form @submit="submitForm" class="q-gutter-md">
                     <q-input filled v-model="formData.content" label="Quote or Snippet *" type="textarea" autogrow
                         lazy-rules :rules="[val => val && val.length > 0 || 'Please type something']" />
+
+                    <q-editor v-model="formData.content" min-height="5rem" :toolbar="[
+                        ['bold', 'italic', 'strike', 'underline'],
+                        ['unordered', 'ordered'],
+                        ['viewsource']
+                    ]" />
                     <q-input filled v-model="formData.page_number" label="Page Number" />
                 </q-form>
             </q-card-section>

@@ -18,7 +18,9 @@
       <q-list v-else bordered separator>
         <q-item v-for="item in linkedEvidence" :key="item.id">
           <q-item-section>
-            <q-item-label class="text-body1">"{{ item.content }}"</q-item-label>
+            <q-item-label class="text-body1">
+              <div v-html="item.content"></div>
+            </q-item-label>
             <q-item-label caption v-if="item.page_number">Page: {{ item.page_number }}</q-item-label>
           </q-item-section>
           <q-item-section side>

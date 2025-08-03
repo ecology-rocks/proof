@@ -1,6 +1,6 @@
 <template>
     <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" persistent>
-        <q-card style="min-width: 400px">
+        <q-card style="min-width: 450px">
             <q-card-section>
                 <div class="text-h6">{{ formTitle }}</div>
             </q-card-section>
@@ -9,8 +9,27 @@
                 <q-form @submit="submitForm" class="q-gutter-md">
                     <q-input filled v-model="formData.title" label="Title *" lazy-rules
                         :rules="[val => val && val.length > 0 || 'Please type something']" />
-                    <q-input filled v-model="formData.author" label="Author" />
-                    <q-input filled type="number" v-model.number="formData.year" label="Year" />
+                    <q-input filled v-model="formData.author" label="Author(s)" />
+                    <div class="row q-col-gutter-sm">
+                        <q-input class="col" filled v-model="formData.entry_type" label="Entry Type (e.g., article)" />
+                        <q-input class="col" filled type="number" v-model.number="formData.year" label="Year" />
+                    </div>
+                    <div class="row q-col-gutter-sm">
+                        <q-input class="col" filled v-model="formData.journal" label="Journal" />
+                        <q-input class="col" filled v-model="formData.publisher" label="Publisher" />
+                    </div>
+                    <div class="row q-col-gutter-sm">
+                        <q-input class="col" filled v-model="formData.volume" label="Volume" />
+                        <q-input class="col" filled v-model="formData.pages" label="Pages" />
+                    </div>
+                    <q-input filled v-model="formData.doi" label="DOI" />
+                    <q-input filled v-model="formData.url" label="URL" />
+
+                    <q-editor v-model="formData.notes" min-height="5rem" placeholder="Notes" :toolbar="[
+                        ['bold', 'italic', 'strike', 'underline'],
+                        ['unordered', 'ordered'],
+                        ['viewsource']
+                    ]" />
                 </q-form>
             </q-card-section>
 
@@ -36,10 +55,19 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'form-submitted']);
 
+// In AddReferenceDialog.vue
 const formData = ref({
     title: '',
     author: '',
     year: null,
+    entry_type: '',
+    journal: '',
+    volume: '',
+    pages: '',
+    publisher: '',
+    doi: '',
+    url: '',
+    notes: ''
 });
 
 const formTitle = computed(() => props.referenceToEdit ? 'Edit Reference' : 'New Reference');
@@ -52,7 +80,7 @@ watch(() => props.modelValue, (isNowVisible) => {
             formData.value = { ...props.referenceToEdit };
         } else {
             // Add mode: reset form
-            formData.value = { title: '', author: '', year: null };
+            formData.value = { title: '', author: '', year: null, entry_type: '', journal: '', volume: '', pages: '', publisher: '', doi: '', url: '', notes: '' };
         }
     }
 });

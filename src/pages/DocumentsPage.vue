@@ -21,14 +21,28 @@
         </q-list>
 
         <q-dialog v-model="isFormDialogOpen" persistent>
-            <q-card style="min-width: 350px">
+            <q-card style="min-width: 600px; max-width: 70vw;">
                 <q-card-section>
                     <div class="text-h6">{{ formTitle }}</div>
                 </q-card-section>
 
-                <q-card-section class="q-pt-none">
-                    <q-input dense v-model="formData.title" autofocus @keyup.enter="submitForm"
-                        label="Document Title *" />
+                <q-card-section class="q-pt-none q-gutter-md">
+                    <q-input dense v-model="formData.title" autofocus label="Document Title *" />
+
+                    <div>
+                        <div class="q-mb-sm text-grey-8">Excerpt</div>
+                        <q-editor v-model="formData.excerpt" min-height="5rem"
+                            :toolbar="[['bold', 'italic', 'underline']]" />
+                    </div>
+
+                    <div>
+                        <div class="q-mb-sm text-grey-8">Main Content</div>
+                        <q-editor v-model="formData.content" min-height="10rem" :toolbar="[
+                            ['bold', 'italic', 'strike', 'underline'],
+                            ['unordered', 'ordered'],
+                            ['viewsource']
+                        ]" />
+                    </div>
                 </q-card-section>
 
                 <q-card-actions align="right">
@@ -48,10 +62,11 @@ import { useQuasar } from 'quasar';
 const $q = useQuasar();
 const documents = ref([]);
 const isFormDialogOpen = ref(false);
-const formData = ref({ title: '' });
+// Add excerpt to the form data
+const formData = ref({ title: '', excerpt: '', content: '' });
 const editingDocumentId = ref(null);
 
-const formTitle = computed(() => editingDocumentId.value ? 'Edit Document Title' : 'New Document');
+const formTitle = computed(() => editingDocumentId.value ? 'Edit Document' : 'New Document');
 
 async function fetchDocuments() {
     const result = await window.db.getAllDocuments();
@@ -64,9 +79,13 @@ function openFormDialog(doc = null) {
     if (doc) {
         editingDocumentId.value = doc.id;
         formData.value.title = doc.title;
+        formData.value.excerpt = doc.excerpt; // Populate excerpt for editing
+        formData.value.content = doc.content; // Ensure content is set for editing
     } else {
         editingDocumentId.value = null;
         formData.value.title = '';
+        formData.value.excerpt = ''; // Reset excerpt
+        formData.value.content = ''; // Reset content
     }
     isFormDialogOpen.value = true;
 }
@@ -76,7 +95,8 @@ async function submitForm() {
 
     let result;
     if (editingDocumentId.value) {
-        result = await window.db.updateDocument({ id: editingDocumentId.value, title: formData.value.title });
+        // Pass the excerpt when updating
+        result = await window.db.updateDocument({ id: editingDocumentId.value, ...formData.value });
     } else {
         result = await window.db.addDocument({ ...formData.value });
     }
@@ -90,6 +110,7 @@ async function submitForm() {
     }
 }
 
+// ... (confirmDelete function remains the same) ...
 async function confirmDelete(doc) {
     $q.dialog({
         title: 'Confirm',
@@ -106,6 +127,7 @@ async function confirmDelete(doc) {
         }
     });
 }
+
 
 onMounted(() => {
     fetchDocuments();

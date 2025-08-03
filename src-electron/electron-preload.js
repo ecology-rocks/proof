@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('db', {
   deleteEvidence: (id) => ipcRenderer.invoke('delete-evidence', id),
   deleteReference: (id) => ipcRenderer.invoke('delete-reference', id),
   deleteStatement: (id) => ipcRenderer.invoke('delete-statement', id),
+  exportDocumentAsMarkdown: (id) => ipcRenderer.invoke('export-document-as-markdown', id),
   getAllDocuments: () => ipcRenderer.invoke('get-all-documents'),
   getAllEvidence: () => ipcRenderer.invoke('get-all-evidence'),
   getAllReferences: () => ipcRenderer.invoke('get-all-references'),

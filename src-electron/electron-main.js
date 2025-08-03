@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import fs from 'fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -17,79 +18,88 @@ const db = knex({
 // Check if the tables exist and create them if they don't
 async function setupDatabase() {
   try {
+
+
+    // In src-electron/electron-main.js, inside the setupDatabase function
     const hasReferences = await db.schema.hasTable('references');
     if (!hasReferences) {
       await db.schema.createTable('references', table => {
         table.increments('id').primary();
-        table.string('title');
+        table.string('title').notNullable();
         table.string('author');
         table.integer('year');
+        // --- New Fields ---
+        table.string('entry_type'); // e.g., 'article', 'book'
+        table.string('journal');
+        table.string('volume');
+        table.string('pages');
+        table.string('publisher');
+        table.string('doi');
+        table.string('url');
+        table.text('notes');
+        // ---
         table.timestamps(true, true);
       });
       console.log("Created 'references' table.");
     }
-    // We can add more tables here as we build the app
-    // e.g., 'evidence', 'statements', etc.
+    // ... after creating the 'references' table
+    const hasEvidence = await db.schema.hasTable('evidence');
+    if (!hasEvidence) {
+      await db.schema.createTable('evidence', table => {
+        table.increments('id').primary();
+        table.text('content').notNullable(); // The actual quote or note
+        table.string('page_number');
+        table.integer('reference_id').unsigned().references('id').inTable('references'); // The foreign key link
+        table.timestamps(true, true);
+      });
+      console.log("Created 'evidence' table.");
+    }
 
     // inside setupDatabase() in src-electron/electron-main.js
 
-// ... after creating the 'references' table
-const hasEvidence = await db.schema.hasTable('evidence');
-if (!hasEvidence) {
-  await db.schema.createTable('evidence', table => {
-    table.increments('id').primary();
-    table.text('content').notNullable(); // The actual quote or note
-    table.string('page_number');
-    table.integer('reference_id').unsigned().references('id').inTable('references'); // The foreign key link
-    table.timestamps(true, true);
-  });
-  console.log("Created 'evidence' table.");
-}
+    const hasStatements = await db.schema.hasTable('statements');
+    if (!hasStatements) {
+      await db.schema.createTable('statements', table => {
+        table.increments('id').primary();
+        table.text('content').notNullable();
+        table.timestamps(true, true);
+      });
+      console.log("Created 'statements' table.");
+    }
 
-// inside setupDatabase() in src-electron/electron-main.js
+    const hasEvidenceStatement = await db.schema.hasTable('evidence_statement');
+    if (!hasEvidenceStatement) {
+      await db.schema.createTable('evidence_statement', table => {
+        table.increments('id').primary();
+        // Foreign keys to link evidence and statements
+        table.integer('evidence_id').unsigned().references('id').inTable('evidence').onDelete('CASCADE');
+        table.integer('statement_id').unsigned().references('id').inTable('statements').onDelete('CASCADE');
+      });
+      console.log("Created 'evidence_statement' join table.");
+    }
 
-const hasStatements = await db.schema.hasTable('statements');
-if (!hasStatements) {
-  await db.schema.createTable('statements', table => {
-    table.increments('id').primary();
-    table.text('content').notNullable();
-    table.timestamps(true, true);
-  });
-  console.log("Created 'statements' table.");
-}
+    const hasDocuments = await db.schema.hasTable('documents');
+    if (!hasDocuments) {
+      await db.schema.createTable('documents', table => {
+        table.increments('id').primary();
+        table.string('title').notNullable();
+        table.text('content'); // For general notes or the body of the document
+        table.text('excerpt'); // For a short excerpt or summary
+        table.timestamps(true, true);
+      });
+      console.log("Created 'documents' table.");
+    }
 
-const hasEvidenceStatement = await db.schema.hasTable('evidence_statement');
-if (!hasEvidenceStatement) {
-  await db.schema.createTable('evidence_statement', table => {
-    table.increments('id').primary();
-    // Foreign keys to link evidence and statements
-    table.integer('evidence_id').unsigned().references('id').inTable('evidence').onDelete('CASCADE');
-    table.integer('statement_id').unsigned().references('id').inTable('statements').onDelete('CASCADE');
-  });
-  console.log("Created 'evidence_statement' join table.");
-}
-
-const hasDocuments = await db.schema.hasTable('documents');
-if (!hasDocuments) {
-  await db.schema.createTable('documents', table => {
-    table.increments('id').primary();
-    table.string('title').notNullable();
-    table.text('content'); // For general notes or the body of the document
-    table.timestamps(true, true);
-  });
-  console.log("Created 'documents' table.");
-}
-
-const hasDocumentStatement = await db.schema.hasTable('document_statement');
-if (!hasDocumentStatement) {
-  await db.schema.createTable('document_statement', table => {
-    table.increments('id').primary();
-    table.integer('document_id').unsigned().references('id').inTable('documents').onDelete('CASCADE');
-    table.integer('statement_id').unsigned().references('id').inTable('statements').onDelete('CASCADE');
-    table.integer('order').unsigned(); // To maintain the order of statements in a document
-  });
-  console.log("Created 'document_statement' join table.");
-}
+    const hasDocumentStatement = await db.schema.hasTable('document_statement');
+    if (!hasDocumentStatement) {
+      await db.schema.createTable('document_statement', table => {
+        table.increments('id').primary();
+        table.integer('document_id').unsigned().references('id').inTable('documents').onDelete('CASCADE');
+        table.integer('statement_id').unsigned().references('id').inTable('statements').onDelete('CASCADE');
+        table.integer('order').unsigned(); // To maintain the order of statements in a document
+      });
+      console.log("Created 'document_statement' join table.");
+    }
 
 
     /// add new database tables above this line
@@ -113,15 +123,10 @@ ipcMain.handle('get-all-references', async () => {
 // IPC handler to add a new reference
 ipcMain.handle('add-reference', async (event, referenceData) => {
   try {
-    // Insert the new reference and get the ID
     const [insertedId] = await db('references').insert(referenceData);
-    // Fetch the newly created record to return to the frontend
     const newReference = await db('references').where('id', insertedId).first();
     return { success: true, reference: newReference };
-  } catch (e) {
-    console.error('Error adding reference:', e);
-    return { success: false, error: e.message };
-  }
+  } catch (e) { console.error('Error adding reference:', e); return { success: false, error: e.message }; }
 });
 
 // IPC handler to get a single reference and its evidence
@@ -329,14 +334,12 @@ ipcMain.handle('update-statement', async (event, { id, content }) => {
 
 
 // IPC handler to update a reference
-ipcMain.handle('update-reference', async (event, { id, title, author, year }) => {
+ipcMain.handle('update-reference', async (event, referenceData) => {
   try {
-    await db('references').where('id', id).update({ title, author, year });
+    const { id, ...dataToUpdate } = referenceData;
+    await db('references').where('id', id).update(dataToUpdate);
     return { success: true };
-  } catch (e) {
-    console.error('Error updating reference:', e);
-    return { success: false, error: e.message };
-  }
+  } catch (e) { console.error('Error updating reference:', e); return { success: false, error: e.message }; }
 });
 
 // IPC handler to update a piece of evidence
@@ -355,7 +358,7 @@ ipcMain.handle('get-all-documents', async () => {
   try {
     const documents = await db('documents').select('*').orderBy('created_at', 'desc');
     return { success: true, documents };
-  } catch (e) { console.error('Error fetching documents:', e); return { success: false, error: e.message };}
+  } catch (e) { console.error('Error fetching documents:', e); return { success: false, error: e.message }; }
 });
 
 // IPC handler to add a new document
@@ -364,7 +367,7 @@ ipcMain.handle('add-document', async (event, documentData) => {
     const [insertedId] = await db('documents').insert(documentData);
     const newDocument = await db('documents').where('id', insertedId).first();
     return { success: true, document: newDocument };
-  } catch (e) { console.error('Error adding document:', e); return { success: false, error: e.message };}
+  } catch (e) { console.error('Error adding document:', e); return { success: false, error: e.message }; }
 });
 
 // IPC handler to get a single document and its linked statements
@@ -438,10 +441,10 @@ ipcMain.handle('get-evidence-details', async (event, id) => {
   }
 });
 
-// IPC handler to update a document's title
-ipcMain.handle('update-document', async (event, { id, title }) => {
+// IPC handler to update a document's title and excerpt
+ipcMain.handle('update-document', async (event, { id, title, excerpt }) => {
   try {
-    await db('documents').where('id', id).update({ title });
+    await db('documents').where('id', id).update({ title, excerpt });
     return { success: true };
   } catch (e) { console.error('Error updating document:', e); return { success: false, error: e.message }; }
 });
@@ -460,6 +463,72 @@ ipcMain.handle('delete-document', async (event, documentId) => {
 });
 
 
+// IPC handler to generate a Markdown file and save it
+ipcMain.handle('export-document-as-markdown', async (event, documentId) => {
+  try {
+    // 1. Fetch all the necessary data
+    const document = await db('documents').where('id', documentId).first();
+    if (!document) {
+      throw new Error('Document not found');
+    }
+
+    const statements = await db('statements')
+      .join('document_statement', 'statements.id', '=', 'document_statement.statement_id')
+      .where('document_statement.document_id', documentId)
+      .select('statements.*')
+      .orderBy('document_statement.order', 'asc');
+
+    // 2. Build the Markdown string
+    let markdownContent = `# ${document.title}\n\n`;
+    if (document.excerpt) {
+      markdownContent += `*${document.excerpt}*\n\n---\n\n`;
+    }
+    if (document.content) {
+      markdownContent += `${document.content}\n\n`;
+    }
+
+    for (const statement of statements) {
+      markdownContent += `## ${statement.content}\n\n`;
+      markdownContent += `### Supporting Evidence\n\n`;
+
+      const evidence = await db('evidence')
+        .join('evidence_statement', 'evidence.id', '=', 'evidence_statement.evidence_id')
+        .join('references', 'evidence.reference_id', '=', 'references.id')
+        .where('evidence_statement.statement_id', statement.id)
+        .select('evidence.content', 'evidence.page_number', 'references.title as referenceTitle');
+
+      if (evidence.length === 0) {
+        markdownContent += `*No evidence linked.*\n\n`;
+      } else {
+        for (const ev of evidence) {
+          markdownContent += `> ${ev.content}\n`;
+          markdownContent += `> — *From: ${ev.referenceTitle}${ev.page_number ? ` (p. ${ev.page_number})` : ''}*\n\n`;
+        }
+      }
+    }
+
+    // 3. Show a "Save File" dialog to the user
+    const { filePath } = await dialog.showSaveDialog({
+      title: 'Export Document as Markdown',
+      defaultPath: `${document.title.replace(/ /g, '_')}.md`,
+      filters: [{ name: 'Markdown Files', extensions: ['md'] }]
+    });
+
+    // 4. If the user chose a path, write the file
+    if (filePath) {
+      await fs.writeFile(filePath, markdownContent);
+      return { success: true, path: filePath };
+    }
+
+    // User cancelled the save dialog
+    return { success: false, cancelled: true };
+
+  } catch (e) {
+    console.error('Error exporting document:', e);
+    return { success: false, error: e.message };
+  }
+});
+
 // add new IPC handlers above this line
 // needed in case process is undefined under Linux
 const platform = process.platform || os.platform()
@@ -468,7 +537,7 @@ const currentDir = fileURLToPath(new URL('.', import.meta.url))
 
 let mainWindow
 
-async function createWindow () {
+async function createWindow() {
   /**
    * Initial window options
    */

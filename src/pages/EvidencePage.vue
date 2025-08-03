@@ -17,7 +17,9 @@
     <q-list v-else bordered separator>
       <q-item v-for="item in filteredEvidenceList" :key="item.id">
         <q-item-section>
-          <q-item-label class="text-body1">"{{ item.content }}"</q-item-label>
+          <q-item-label class="text-body1">
+            <div v-html="item.content"></div>
+          </q-item-label>
           <q-item-label caption>
             From: {{ item.referenceTitle }}
             <span v-if="item.page_number"> (p. {{ item.page_number }})</span>
