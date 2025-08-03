@@ -6,6 +6,17 @@
       <blockquote class="text-h5 q-my-md q-pl-md" style="border-left: 4px solid #ccc;">
         <div v-html="evidence.content"></div>
       </blockquote>
+      <div class="row items-center q-gutter-x-xl q-mb-md">
+        <div class="row items-center no-wrap">
+          <span class="text-subtitle2 text-grey-8 q-mr-sm">Strength</span>
+          <q-rating :model-value="evidence.rating_strength" size="md" color="amber" icon="star" readonly />
+        </div>
+        <div class="row items-center no-wrap">
+          <span class="text-subtitle2 text-grey-8 q-mr-sm">Reliability</span>
+          <q-rating :model-value="evidence.rating_reliability" size="md" color="deep-purple" icon="verified_user"
+            readonly />
+        </div>
+      </div>
 
       <div class="q-mb-xl">
         <div class="text-subtitle2 text-grey">Source Reference:</div>

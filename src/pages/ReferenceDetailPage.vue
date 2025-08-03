@@ -4,7 +4,9 @@
 
     <div v-if="reference">
       <div class="text-h4">{{ reference.title }}</div>
+      <q-btn label="Edit" icon="edit" flat @click="openFormDialog" />
       <div class="text-subtitle1 text-grey">{{ reference.author }} ({{ reference.year }})</div>
+
 
       <q-card flat bordered class="q-my-md">
         <q-card-section>
@@ -19,9 +21,9 @@
           <div v-if="reference.pages"><strong>Pages:</strong> {{ reference.pages }}</div>
           <div v-if="reference.doi"><strong>DOI:</strong> {{ reference.doi }}</div>
           <div v-if="reference.url"><strong>URL:</strong> <a :href="reference.url" target="_blank">{{ reference.url
-              }}</a></div>
+          }}</a></div>
           <div v-if="reference.notes" class="q-mt-md">
-            <strong>Notes:</strong>
+            <strong>Abstract / Notes:</strong>
             <div class="text-body2" style="white-space: pre-wrap;">
               <div v-html="reference.notes"></div>
             </div>
@@ -45,7 +47,23 @@
             <q-item-label class="text-body1">
               <div v-html="item.content"></div>
             </q-item-label>
-            <q-item-label caption v-if="item.page_number">Page: {{ item.page_number }}</q-item-label>
+
+            <q-item-label caption>
+              From: {{ item.referenceTitle || (reference && reference.title) }}
+              <span v-if="item.page_number"> (p. {{ item.page_number }})</span>
+            </q-item-label>
+
+            <div class="row items-center q-mt-xs">
+              <div class="row items-center no-wrap">
+                <span class="text-caption text-grey-7 q-mr-xs">Strength:</span>
+                <q-rating :model-value="item.rating_strength" size="xs" color="amber" icon="star" readonly />
+              </div>
+              <div class="row items-center no-wrap q-ml-md">
+                <span class="text-caption text-grey-7 q-mr-xs">Reliability:</span>
+                <q-rating :model-value="item.rating_reliability" size="xs" color="deep-purple" icon="verified_user"
+                  readonly />
+              </div>
+            </div>
           </q-item-section>
           <q-item-section side>
             <div class="row">
@@ -65,6 +83,8 @@
 
     <add-evidence-dialog v-if="reference" v-model="isEvidenceFormOpen" :reference-id="reference.id"
       :evidence-to-edit="editingEvidence" @form-submitted="fetchDetails" />
+    <add-reference-dialog v-model="isFormDialogOpen" :reference-to-edit="editingReference"
+      @form-submitted="fetchDetails" />
   </q-page>
 </template>
 
@@ -72,6 +92,7 @@
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
+import AddReferenceDialog from 'src/components/AddReferenceDialog.vue';
 import AddEvidenceDialog from 'src/components/AddEvidenceDialog.vue';
 
 const router = useRouter();
@@ -79,15 +100,14 @@ const $q = useQuasar();
 const route = useRoute();
 const reference = ref(null);
 const evidenceList = ref([]);
-// --- Refactor Start ---
+const isFormDialogOpen = ref(false);
+const editingReference = ref(null);
+const isEvidenceFormOpen = ref(false);
+const editingEvidence = ref(null);
 
 function goBack() {
   router.back();
 }
-
-
-const isEvidenceFormOpen = ref(false);
-const editingEvidence = ref(null); // Will hold the evidence being edited
 
 async function fetchDetails() {
   const referenceId = parseInt(route.params.id, 10);
@@ -100,12 +120,15 @@ async function fetchDetails() {
   }
 }
 
-// This function now handles opening the dialog for both modes
+function openFormDialog() {
+  editingReference.value = reference.value;
+  isFormDialogOpen.value = true;
+}
+
 function openEvidenceForm(evidence = null) {
   editingEvidence.value = evidence;
   isEvidenceFormOpen.value = true;
 }
-// --- Refactor End ---
 
 async function confirmDeleteEvidence(evidence) {
   $q.dialog({

@@ -4,6 +4,10 @@ import path from 'node:path'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import knex from 'knex'
+// In src-electron/electron-main.js
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const bibtexParse = require('bibtex-parse');
 
 // Initialize the database
 const db = knex({
@@ -50,6 +54,8 @@ async function setupDatabase() {
         table.text('content').notNullable(); // The actual quote or note
         table.string('page_number');
         table.integer('reference_id').unsigned().references('id').inTable('references'); // The foreign key link
+        table.integer('rating_strength').defaultTo(0);
+        table.integer('rating_reliability').defaultTo(0);
         table.timestamps(true, true);
       });
       console.log("Created 'evidence' table.");
@@ -343,9 +349,10 @@ ipcMain.handle('update-reference', async (event, referenceData) => {
 });
 
 // IPC handler to update a piece of evidence
-ipcMain.handle('update-evidence', async (event, { id, content, page_number }) => {
+ipcMain.handle('update-evidence', async (event, evidenceData) => {
   try {
-    await db('evidence').where('id', id).update({ content, page_number });
+    const { id, ...dataToUpdate } = evidenceData; // Separates the ID from the rest of the data
+    await db('evidence').where('id', id).update(dataToUpdate); // Updates all other fields
     return { success: true };
   } catch (e) {
     console.error('Error updating evidence:', e);
@@ -525,6 +532,62 @@ ipcMain.handle('export-document-as-markdown', async (event, documentId) => {
 
   } catch (e) {
     console.error('Error exporting document:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+// IPC handler to import references from a .bib file
+ipcMain.handle('import-from-bibtex', async () => {
+  try {
+    const { filePaths } = await dialog.showOpenDialog({
+      title: 'Import from BibTeX',
+      filters: [{ name: 'BibTeX Files', extensions: ['bib'] }],
+      properties: ['openFile']
+    });
+
+    if (!filePaths || filePaths.length === 0) {
+      return { success: false, cancelled: true };
+    }
+
+    const fileContent = await fs.readFile(filePaths[0], 'utf8');
+    const entries = bibtexParse.parse(fileContent);
+    const referencesToInsert = [];
+
+    // --- THIS IS THE CORRECTED LOGIC ---
+    for (const entry of entries) {
+      // Skip if it's not a real entry (like a comment)
+      if (entry.itemtype !== 'entry' || !entry.fields) {
+        continue;
+      }
+
+      // Convert the 'fields' array into a simple key-value object
+      const tags = entry.fields.reduce((acc, field) => {
+        acc[field.name] = field.value;
+        return acc;
+      }, {});
+
+      referencesToInsert.push({
+        entry_type: entry.type, // Use 'type' instead of 'entryType'
+        title: (tags.title || 'No Title').replace(/{{|}}/g, ''),
+        author: tags.author,
+        year: parseInt(tags.year, 10) || null,
+        journal: tags.journal,
+        volume: tags.volume,
+        pages: tags.pages,
+        publisher: tags.institution || tags.publisher, // Handle 'institution' for tech reports
+        doi: tags.doi,
+        url: tags.url,
+        notes: tags.abstract || tags.note // Use abstract as notes if available
+      });
+    }
+
+    if (referencesToInsert.length > 0) {
+      await db('references').insert(referencesToInsert);
+    }
+
+    return { success: true, count: referencesToInsert.length };
+  } catch (e) {
+    console.error('Error importing from BibTeX:', e);
     return { success: false, error: e.message };
   }
 });

@@ -7,15 +7,25 @@
 
             <q-card-section class="q-pt-none">
                 <q-form @submit="submitForm" class="q-gutter-md">
-                    <q-input filled v-model="formData.content" label="Quote or Snippet *" type="textarea" autogrow
-                        lazy-rules :rules="[val => val && val.length > 0 || 'Please type something']" />
-
                     <q-editor v-model="formData.content" min-height="5rem" :toolbar="[
                         ['bold', 'italic', 'strike', 'underline'],
                         ['unordered', 'ordered'],
                         ['viewsource']
                     ]" />
                     <q-input filled v-model="formData.page_number" label="Page Number" />
+
+                    <div class="q-gutter-y-sm q-px-sm">
+                        <div class="column">
+                            <label class="q-mb-sm">Strength</label>
+                            <q-slider v-model="formData.rating_strength" :min="0" :max="5" label label-always snap
+                                color="amber" />
+                        </div>
+                        <div class="column">
+                            <label class="q-mb-sm">Reliability</label>
+                            <q-slider v-model="formData.rating_reliability" :min="0" :max="5" label label-always snap
+                                color="deep-purple" />
+                        </div>
+                    </div>
                 </q-form>
             </q-card-section>
 
@@ -44,6 +54,8 @@ const emit = defineEmits(['update:modelValue', 'form-submitted']);
 const formData = ref({
     content: '',
     page_number: '',
+    rating_strength: 0,
+    rating_reliability: 0
 });
 
 const formTitle = computed(() => props.evidenceToEdit ? 'Edit Evidence' : 'New Evidence');
@@ -53,7 +65,7 @@ watch(() => props.modelValue, (isNowVisible) => {
         if (props.evidenceToEdit) {
             formData.value = { ...props.evidenceToEdit };
         } else {
-            formData.value = { content: '', page_number: '' };
+            formData.value = { content: '', page_number: '', rating_strength: 0, rating_reliability: 0 };
         }
     }
 });

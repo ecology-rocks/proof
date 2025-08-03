@@ -2,6 +2,8 @@
   <q-page class="q-pa-md">
     <div class="q-mb-md">
       <q-btn label="Add Reference" color="primary" @click="openFormDialog()" />
+      <q-btn label="Import from BibTeX" icon="upload_file" color="secondary" @click="importFromBibtex"
+        class="q-ml-sm" />
       <q-btn label="Refresh" color="secondary" @click="fetchReferences" class="q-ml-sm" />
     </div>
 
@@ -67,6 +69,25 @@ const filteredReferences = computed(() => {
 async function fetchReferences() {
   references.value = await window.db.getAllReferences();
 }
+
+async function importFromBibtex() {
+  const result = await window.db.importFromBibtex();
+  if (result.success) {
+    $q.notify({
+      type: 'positive',
+      message: `${result.count} references imported successfully.`,
+      icon: 'cloud_done'
+    });
+    await fetchReferences(); // Refresh the list
+  } else if (!result.cancelled) {
+    $q.notify({
+      type: 'negative',
+      message: 'An error occurred during import.'
+    });
+  }
+}
+
+
 
 function openFormDialog(reference = null) {
   editingReference.value = reference;

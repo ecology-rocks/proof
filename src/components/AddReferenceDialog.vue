@@ -25,7 +25,7 @@
                     <q-input filled v-model="formData.doi" label="DOI" />
                     <q-input filled v-model="formData.url" label="URL" />
 
-                    <q-editor v-model="formData.notes" min-height="5rem" placeholder="Notes" :toolbar="[
+                    <q-editor v-model="formData.notes" min-height="5rem" placeholder="Abstract" :toolbar="[
                         ['bold', 'italic', 'strike', 'underline'],
                         ['unordered', 'ordered'],
                         ['viewsource']

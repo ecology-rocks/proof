@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('db', {
   getEvidenceDetails: (id) => ipcRenderer.invoke('get-evidence-details', id),
   getReferenceDetails: (id) => ipcRenderer.invoke('get-reference-details', id),
   getStatementDetails: (id) => ipcRenderer.invoke('get-statement-details', id),
+  importFromBibtex: () => ipcRenderer.invoke('import-from-bibtex'),
   linkEvidenceToStatement: (linkData) => ipcRenderer.invoke('link-evidence-to-statement', linkData),
   linkStatementsToDocument: (linkData) => ipcRenderer.invoke('link-statements-to-document', linkData),
   unlinkEvidenceFromStatement: (linkData) => ipcRenderer.invoke('unlink-evidence-from-statement', linkData),

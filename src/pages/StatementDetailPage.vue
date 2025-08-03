@@ -21,7 +21,23 @@
             <q-item-label class="text-body1">
               <div v-html="item.content"></div>
             </q-item-label>
-            <q-item-label caption v-if="item.page_number">Page: {{ item.page_number }}</q-item-label>
+
+            <q-item-label caption>
+              From: {{ item.referenceTitle || (reference && reference.title) }}
+              <span v-if="item.page_number"> (p. {{ item.page_number }})</span>
+            </q-item-label>
+
+            <div class="row items-center q-mt-xs">
+              <div class="row items-center no-wrap">
+                <span class="text-caption text-grey-7 q-mr-xs">Strength:</span>
+                <q-rating :model-value="item.rating_strength" size="xs" color="amber" icon="star" readonly />
+              </div>
+              <div class="row items-center no-wrap q-ml-md">
+                <span class="text-caption text-grey-7 q-mr-xs">Reliability:</span>
+                <q-rating :model-value="item.rating_reliability" size="xs" color="deep-purple" icon="verified_user"
+                  readonly />
+              </div>
+            </div>
           </q-item-section>
           <q-item-section side>
             <q-btn icon="link_off" flat round color="grey" @click="confirmUnlink(item)" />
