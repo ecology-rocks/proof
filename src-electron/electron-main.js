@@ -69,8 +69,30 @@ if (!hasEvidenceStatement) {
   console.log("Created 'evidence_statement' join table.");
 }
 
+const hasDocuments = await db.schema.hasTable('documents');
+if (!hasDocuments) {
+  await db.schema.createTable('documents', table => {
+    table.increments('id').primary();
+    table.string('title').notNullable();
+    table.text('content'); // For general notes or the body of the document
+    table.timestamps(true, true);
+  });
+  console.log("Created 'documents' table.");
+}
+
+const hasDocumentStatement = await db.schema.hasTable('document_statement');
+if (!hasDocumentStatement) {
+  await db.schema.createTable('document_statement', table => {
+    table.increments('id').primary();
+    table.integer('document_id').unsigned().references('id').inTable('documents').onDelete('CASCADE');
+    table.integer('statement_id').unsigned().references('id').inTable('statements').onDelete('CASCADE');
+    table.integer('order').unsigned(); // To maintain the order of statements in a document
+  });
+  console.log("Created 'document_statement' join table.");
+}
 
 
+    /// add new database tables above this line
   } catch (e) {
     console.error('Error setting up database:', e);
   }
@@ -149,15 +171,23 @@ ipcMain.handle('add-statement', async (event, statementData) => {
   }
 });
 
-// IPC handler to get a single statement and its linked evidence
+// Replace the old 'get-statement-details' handler with this one
 ipcMain.handle('get-statement-details', async (event, id) => {
   try {
     const statement = await db('statements').where('id', id).first();
+
     const evidence = await db('evidence')
       .join('evidence_statement', 'evidence.id', '=', 'evidence_statement.evidence_id')
       .where('evidence_statement.statement_id', id)
       .select('evidence.*');
-    return { success: true, statement, evidence };
+
+    // Add this query to find linked documents
+    const documents = await db('documents')
+      .join('document_statement', 'documents.id', '=', 'document_statement.document_id')
+      .where('document_statement.statement_id', id)
+      .select('documents.*');
+
+    return { success: true, statement, evidence, documents }; // Add documents to the return object
   } catch (e) {
     console.error('Error fetching statement details:', e);
     return { success: false, error: e.message };
@@ -320,6 +350,114 @@ ipcMain.handle('update-evidence', async (event, { id, content, page_number }) =>
   }
 });
 
+// IPC handler to get all documents
+ipcMain.handle('get-all-documents', async () => {
+  try {
+    const documents = await db('documents').select('*').orderBy('created_at', 'desc');
+    return { success: true, documents };
+  } catch (e) { console.error('Error fetching documents:', e); return { success: false, error: e.message };}
+});
+
+// IPC handler to add a new document
+ipcMain.handle('add-document', async (event, documentData) => {
+  try {
+    const [insertedId] = await db('documents').insert(documentData);
+    const newDocument = await db('documents').where('id', insertedId).first();
+    return { success: true, document: newDocument };
+  } catch (e) { console.error('Error adding document:', e); return { success: false, error: e.message };}
+});
+
+// IPC handler to get a single document and its linked statements
+ipcMain.handle('get-document-details', async (event, id) => {
+  try {
+    const document = await db('documents').where('id', id).first();
+    const statements = await db('statements')
+      .join('document_statement', 'statements.id', '=', 'document_statement.statement_id')
+      .where('document_statement.document_id', id)
+      .select('statements.*', 'document_statement.order')
+      .orderBy('document_statement.order', 'asc');
+    return { success: true, document, statements };
+  } catch (e) {
+    console.error('Error fetching document details:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+
+// IPC handler to get all statements for linking to a document
+ipcMain.handle('get-all-statements-for-linking', async () => {
+  try {
+    const statements = await db('statements').select('*');
+    return { success: true, statements };
+  } catch (e) { console.error('Error fetching statements for linking:', e); return { success: false, error: e.message }; }
+});
+
+// IPC handler to save the ordered links between a document and its statements
+ipcMain.handle('link-statements-to-document', async (event, { documentId, orderedStatementIds }) => {
+  try {
+    await db.transaction(async (trx) => {
+      // First, remove all existing links for this document.
+      await trx('document_statement').where('document_id', documentId).del();
+
+      // Then, insert the new links with the correct order.
+      if (orderedStatementIds && orderedStatementIds.length > 0) {
+        const linksToInsert = orderedStatementIds.map((statementId, index) => ({
+          document_id: documentId,
+          statement_id: statementId,
+          order: index
+        }));
+        await trx('document_statement').insert(linksToInsert);
+      }
+    });
+    return { success: true };
+  } catch (e) { console.error('Error linking statements:', e); return { success: false, error: e.message }; }
+});
+
+
+// IPC handler to get a single piece of evidence and its connections
+ipcMain.handle('get-evidence-details', async (event, id) => {
+  try {
+    const evidence = await db('evidence')
+      .join('references', 'evidence.reference_id', '=', 'references.id')
+      .where('evidence.id', id)
+      .select(
+        'evidence.*',
+        'references.title as referenceTitle'
+      )
+      .first();
+
+    const statements = await db('statements')
+      .join('evidence_statement', 'statements.id', '=', 'evidence_statement.statement_id')
+      .where('evidence_statement.evidence_id', id)
+      .select('statements.*');
+
+    return { success: true, evidence, statements };
+  } catch (e) {
+    console.error('Error fetching evidence details:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+// IPC handler to update a document's title
+ipcMain.handle('update-document', async (event, { id, title }) => {
+  try {
+    await db('documents').where('id', id).update({ title });
+    return { success: true };
+  } catch (e) { console.error('Error updating document:', e); return { success: false, error: e.message }; }
+});
+
+// IPC handler to delete a document and its statement links
+ipcMain.handle('delete-document', async (event, documentId) => {
+  try {
+    await db.transaction(async (trx) => {
+      // First, delete all links in the join table
+      await trx('document_statement').where('document_id', documentId).del();
+      // Then, delete the document itself
+      await trx('documents').where('id', documentId).del();
+    });
+    return { success: true };
+  } catch (e) { console.error('Error deleting document:', e); return { success: false, error: e.message }; }
+});
 
 
 // add new IPC handlers above this line

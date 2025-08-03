@@ -1,9 +1,10 @@
 <template>
   <q-page class="q-pa-md">
+    <q-btn flat round dense icon="arrow_back" @click="goBack" class="q-mb-md" aria-label="Back" />
     <div v-if="statement">
       <div class="text-h5 q-mb-md">{{ statement.content }}</div>
 
-      <q-separator class="q-my-md" />
+      <q-separator class="q-my-xl" />
 
       <div class="row items-center justify-between q-mb-md">
         <div class="text-h6">Supporting Evidence</div>
@@ -20,34 +21,59 @@
             <q-item-label class="text-body1">"{{ item.content }}"</q-item-label>
             <q-item-label caption v-if="item.page_number">Page: {{ item.page_number }}</q-item-label>
           </q-item-section>
-
           <q-item-section side>
             <q-btn icon="link_off" flat round color="grey" @click="confirmUnlink(item)" />
           </q-item-section>
         </q-item>
       </q-list>
 
+      <q-separator class="q-my-xl" />
+
+      <div v-if="linkedDocuments.length > 0">
+        <div class="text-h6">Used in Documents</div>
+        <q-list bordered separator dense>
+          <q-item v-for="doc in linkedDocuments" :key="doc.id" clickable :to="`/document/${doc.id}`">
+            <q-item-section avatar>
+              <q-icon name="article" color="grey" />
+            </q-item-section>
+            <q-item-section>
+              {{ doc.title }}
+            </q-item-section>
+            <q-item-section side>
+              <q-icon name="arrow_forward_ios" color="grey" size="xs" />
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </div>
+
     </div>
-    <link-evidence-dialog v-if="statement" v-model="isLinkDialogOpen" :statement-id="statement.id"
-      :already-linked-ids="linkedEvidenceIds" @evidence-linked="fetchDetails" />
     <div v-else class="text-center">
       <q-spinner-dots color="primary" size="40px" />
       <p>Loading statement...</p>
     </div>
+
+    <link-evidence-dialog v-if="statement" v-model="isLinkDialogOpen" :statement-id="statement.id"
+      :already-linked-ids="linkedEvidenceIds" @evidence-linked="fetchDetails" />
   </q-page>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'; // 1. Add computed
-import { useRoute } from 'vue-router';
+import { ref, onMounted, computed } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import LinkEvidenceDialog from 'src/components/LinkEvidenceDialog.vue';
 
 const $q = useQuasar();
 const route = useRoute();
+const router = useRouter();
 const statement = ref(null);
 const linkedEvidence = ref([]);
-const isLinkDialogOpen = ref(false); // 3. Add state for the dialog
+const linkedDocuments = ref([]); // 1. Add a ref for the documents
+const isLinkDialogOpen = ref(false);
+
+function goBack() {
+  router.back();
+}
 
 async function fetchDetails() {
   const statementId = parseInt(route.params.id, 10);
@@ -58,17 +84,16 @@ async function fetchDetails() {
   if (result.success) {
     statement.value = result.statement;
     linkedEvidence.value = result.evidence;
+    linkedDocuments.value = result.documents; // 2. Store the documents
   }
 }
 
-// 4. This function now opens the dialog
+// ... (the rest of the script block remains the same) ...
+
 function linkEvidence() {
   isLinkDialogOpen.value = true;
 }
 
-
-
-// 3. Add the new unlink function
 async function confirmUnlink(evidence) {
   $q.dialog({
     title: 'Confirm Unlink',
@@ -88,7 +113,7 @@ async function confirmUnlink(evidence) {
         icon: 'cloud_done',
         message: 'Evidence unlinked'
       });
-      await fetchDetails(); // Refresh the list
+      await fetchDetails();
     } else {
       $q.notify({
         color: 'red-5',
@@ -100,11 +125,9 @@ async function confirmUnlink(evidence) {
   });
 }
 
-
 const linkedEvidenceIds = computed(() => {
   return linkedEvidence.value.map(item => item.id);
 });
-
 
 onMounted(() => {
   fetchDetails();

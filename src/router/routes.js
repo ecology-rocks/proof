@@ -4,10 +4,13 @@ const routes = [
     component: () => import('layouts/MainLayout.vue'),
     children: [
       { path: '', component: () => import('pages/IndexPage.vue') },
+      { path: '/statements', component: () => import('pages/StatementsPage.vue') },
+      { path: '/evidence', component: () => import('pages/EvidencePage.vue') }, 
+      { path: '/documents', component: () => import('pages/DocumentsPage.vue') }, 
+      { path: '/statement/:id', component: () => import('pages/StatementDetailPage.vue') },
       { path: '/reference/:id', component: () => import('pages/ReferenceDetailPage.vue') },
-       { path: '/statements', component: () => import('pages/StatementsPage.vue') },
-        { path: '/evidence', component: () => import('pages/EvidencePage.vue') }, // Add this line
-         { path: '/statement/:id', component: () => import('pages/StatementDetailPage.vue') },
+      { path: '/document/:id', component: () => import('pages/DocumentDetailPage.vue') },
+      { path: '/evidence/:id', component: () => import('pages/EvidenceDetailPage.vue') }
     ]
   },
 

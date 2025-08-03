@@ -41,6 +41,15 @@
           </q-item-section>
         </q-item>
 
+        <q-item clickable to="/documents">
+          <q-item-section avatar>
+            <q-icon name="article" />
+          </q-item-section>
+          <q-item-section>
+            <q-item-label>Documents</q-item-label>
+          </q-item-section>
+        </q-item>
+
         <q-separator class="q-my-md" />
         <q-item-label header>
           Essential Links

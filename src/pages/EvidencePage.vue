@@ -10,9 +10,8 @@
       </template>
     </q-input>
 
-
-    <div v-if="evidenceList.length === 0" class="text-center text-grey q-mt-lg">
-      No evidence has been collected yet.
+    <div v-if="!filteredEvidenceList.length" class="text-center text-grey q-mt-lg">
+      No evidence found.
     </div>
 
     <q-list v-else bordered separator>
@@ -25,23 +24,35 @@
           </q-item-label>
         </q-item-section>
         <q-item-section side>
-          <q-btn icon="delete" flat round color="grey" @click="confirmDeleteEvidence(item)" />
+          <div class="row">
+            <q-btn icon="edit" flat round color="grey" @click="openEditDialog(item)" />
+            <q-btn icon="delete" flat round color="grey" @click="confirmDeleteEvidence(item)" />
+            <q-btn icon="arrow_forward" flat round color="grey" :to="`/evidence/${item.id}`" />
+          </div>
         </q-item-section>
       </q-item>
     </q-list>
+
+    <add-evidence-dialog v-model="isFormDialogOpen" :evidence-to-edit="editingEvidence"
+      @form-submitted="fetchAllEvidence" />
 
   </q-page>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'; // 1. Import computed
+import { ref, onMounted, computed } from 'vue';
 import { useQuasar } from 'quasar';
+import AddEvidenceDialog from 'src/components/AddEvidenceDialog.vue'; // 1. Import the dialog
 
 const $q = useQuasar();
 const evidenceList = ref([]);
-const searchTerm = ref(''); // 2. Add a ref for the search term
+const searchTerm = ref('');
 
-// 3. Add a computed property to filter the evidence
+// --- Add these refs to manage the dialog ---
+const isFormDialogOpen = ref(false);
+const editingEvidence = ref(null);
+// ---
+
 const filteredEvidenceList = computed(() => {
   if (!searchTerm.value) {
     return evidenceList.value;
@@ -54,13 +65,19 @@ const filteredEvidenceList = computed(() => {
   });
 });
 
-
 async function fetchAllEvidence() {
   const result = await window.db.getAllEvidence();
   if (result.success) {
     evidenceList.value = result.evidence;
   }
 }
+
+// --- Add this function to open the dialog in edit mode ---
+function openEditDialog(evidence) {
+  editingEvidence.value = evidence;
+  isFormDialogOpen.value = true;
+}
+// ---
 
 async function confirmDeleteEvidence(evidence) {
   $q.dialog({
@@ -77,7 +94,7 @@ async function confirmDeleteEvidence(evidence) {
         icon: 'cloud_done',
         message: 'Evidence deleted'
       });
-      await fetchAllEvidence(); // Refresh the list
+      await fetchAllEvidence();
     } else {
       $q.notify({
         color: 'red-5',

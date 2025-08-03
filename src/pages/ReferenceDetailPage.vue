@@ -1,5 +1,7 @@
 <template>
   <q-page class="q-pa-md">
+    <q-btn flat round dense icon="arrow_back" @click="goBack" class="q-mb-md" aria-label="Back" />
+
     <div v-if="reference">
       <div class="text-h4">{{ reference.title }}</div>
       <div class="text-subtitle1 text-grey">{{ reference.author }} ({{ reference.year }})</div>
@@ -43,15 +45,22 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import AddEvidenceDialog from 'src/components/AddEvidenceDialog.vue';
 
+const router = useRouter();
 const $q = useQuasar();
 const route = useRoute();
 const reference = ref(null);
 const evidenceList = ref([]);
 // --- Refactor Start ---
+
+function goBack() {
+  router.back();
+}
+
+
 const isEvidenceFormOpen = ref(false);
 const editingEvidence = ref(null); // Will hold the evidence being edited
 
