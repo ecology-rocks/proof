@@ -12,6 +12,8 @@
                         ['unordered', 'ordered'],
                         ['viewsource']
                     ]" />
+                    <q-select filled v-model="selectedTags" :options="allTags" label="Tags" multiple use-chips use-input
+                        new-value-mode="add-unique" />
                     <q-input filled v-model="formData.page_number" label="Page Number" />
 
                     <div class="q-gutter-y-sm q-px-sm">
@@ -38,7 +40,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 
 const props = defineProps({
     modelValue: Boolean,
@@ -57,15 +59,32 @@ const formData = ref({
     rating_strength: 0,
     rating_reliability: 0
 });
+const allTags = ref([]); // Holds all available tags for the dropdown
+const selectedTags = ref([]); // Holds the tags for the current evidence item
 
 const formTitle = computed(() => props.evidenceToEdit ? 'Edit Evidence' : 'New Evidence');
 
-watch(() => props.modelValue, (isNowVisible) => {
+// Fetch all tags when the component is first created
+onMounted(async () => {
+    const result = await window.db.getAllTags();
+    if (result.success) {
+        allTags.value = result.tags.map(t => t.name);
+    }
+});
+
+watch(() => props.modelValue, async (isNowVisible) => {
     if (isNowVisible) {
         if (props.evidenceToEdit) {
             formData.value = { ...props.evidenceToEdit };
+            // Fetch the tags for the specific evidence being edited
+            const result = await window.db.getTagsForEvidence(props.evidenceToEdit.id);
+            if (result.success) {
+                selectedTags.value = result.tags;
+            }
         } else {
+            // Reset form for adding new evidence
             formData.value = { content: '', page_number: '', rating_strength: 0, rating_reliability: 0 };
+            selectedTags.value = [];
         }
     }
 });
@@ -74,21 +93,30 @@ async function submitForm() {
     if (!formData.value.content) return;
 
     let result;
+    let evidenceId;
+
     if (props.evidenceToEdit) {
         // Update existing evidence
         result = await window.db.updateEvidence({ ...formData.value });
+        evidenceId = props.evidenceToEdit.id;
     } else {
         // Add new evidence
-        const dataToSave = {
-            ...formData.value,
-            reference_id: props.referenceId,
-        };
+        const dataToSave = { ...formData.value, reference_id: props.referenceId };
         result = await window.db.addEvidence(dataToSave);
+        // We get the new evidence object back from the addEvidence call
+        evidenceId = result.evidence?.id;
     }
 
-    if (result.success) {
-        emit('form-submitted');
-        emit('update:modelValue', false);
+    if (result.success && evidenceId) {
+        // After successfully saving the evidence, save the tags
+        const tagResult = await window.db.updateEvidenceTags({
+            evidenceId: evidenceId,
+            tags: [...selectedTags.value]
+        });
+        if (tagResult.success) {
+            emit('form-submitted');
+            emit('update:modelValue', false);
+        }
     } else {
         console.error('Failed to save evidence:', result.error);
     }

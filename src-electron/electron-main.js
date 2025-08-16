@@ -107,6 +107,27 @@ async function setupDatabase() {
       console.log("Created 'document_statement' join table.");
     }
 
+    // In src-electron/electron-main.js, inside setupDatabase()
+
+    const hasTags = await db.schema.hasTable('tags');
+    if (!hasTags) {
+      await db.schema.createTable('tags', table => {
+        table.increments('id').primary();
+        table.string('name').unique().notNullable();
+      });
+      console.log("Created 'tags' table.");
+    }
+
+    const hasEvidenceTag = await db.schema.hasTable('evidence_tag');
+    if (!hasEvidenceTag) {
+      await db.schema.createTable('evidence_tag', table => {
+        table.increments('id').primary();
+        table.integer('evidence_id').unsigned().references('id').inTable('evidence').onDelete('CASCADE');
+        table.integer('tag_id').unsigned().references('id').inTable('tags').onDelete('CASCADE');
+      });
+      console.log("Created 'evidence_tag' join table.");
+    }
+
 
     /// add new database tables above this line
   } catch (e) {
@@ -591,6 +612,56 @@ ipcMain.handle('import-from-bibtex', async () => {
     return { success: false, error: e.message };
   }
 });
+
+// IPC handler to get all tags
+ipcMain.handle('get-all-tags', async () => {
+  try {
+    const tags = await db('tags').select('*').orderBy('name', 'asc');
+    return { success: true, tags };
+  } catch (e) { console.error('Error fetching tags:', e); return { success: false, error: e.message }; }
+});
+
+// IPC handler to get tags for a specific piece of evidence
+ipcMain.handle('get-tags-for-evidence', async (event, evidenceId) => {
+  try {
+    const tags = await db('tags')
+      .join('evidence_tag', 'tags.id', '=', 'evidence_tag.tag_id')
+      .where('evidence_tag.evidence_id', evidenceId)
+      .select('tags.name');
+    return { success: true, tags: tags.map(t => t.name) };
+  } catch (e) { console.error('Error fetching evidence tags:', e); return { success: false, error: e.message }; }
+});
+
+// IPC handler to update the tags for a piece of evidence
+ipcMain.handle('update-evidence-tags', async (event, { evidenceId, tags }) => {
+  try {
+    await db.transaction(async (trx) => {
+      // 1. Find or create all tags and get their IDs
+      const tagIds = await Promise.all(tags.map(async (tagName) => {
+        let tag = await trx('tags').where('name', tagName).first();
+        if (tag) {
+          return tag.id;
+        }
+        const [newTagId] = await trx('tags').insert({ name: tagName });
+        return newTagId;
+      }));
+
+      // 2. Remove existing links for this evidence
+      await trx('evidence_tag').where('evidence_id', evidenceId).del();
+
+      // 3. Insert the new links
+      if (tagIds.length > 0) {
+        const linksToInsert = tagIds.map(tagId => ({
+          evidence_id: evidenceId,
+          tag_id: tagId,
+        }));
+        await trx('evidence_tag').insert(linksToInsert);
+      }
+    });
+    return { success: true };
+  } catch (e) { console.error('Error updating evidence tags:', e); return { success: false, error: e.message }; }
+});
+
 
 // add new IPC handlers above this line
 // needed in case process is undefined under Linux
