@@ -1,0 +1,115 @@
+{
+  "type": "ProofSharedDocument",
+  "version": 1,
+  "exportDate": "2025-08-16T12:00:00.000Z",
+  "data": {
+    "documents": [
+      {
+        "id": 1,
+        "title": "The Case for Urban Green Spaces",
+        "excerpt": "<p>This document outlines the primary benefits of integrating parks and green spaces into urban environments, focusing on public health, environmental impact, and community well-being.</p>",
+        "content": "<p>By examining scientific literature and expert opinions, we can build a strong case for prioritizing the development and maintenance of green spaces within our cities.</p>"
+      }
+    ],
+    "statements": [
+      {
+        "id": 1,
+        "content": "Urban parks improve the physical and mental health of residents."
+      },
+      {
+        "id": 2,
+        "content": "Green spaces can mitigate the urban heat island effect."
+      },
+      {
+        "id": 3,
+        "content": "Community gardens and local parks foster social cohesion."
+      }
+    ],
+    "evidence": [
+      {
+        "id": 1,
+        "content": "<p>\"Access to green space is associated with lower rates of depression and anxiety, and increased levels of physical activity.\"</p>",
+        "page_number": "45",
+        "reference_id": 1,
+        "rating_strength": 5,
+        "rating_reliability": 4
+      },
+      {
+        "id": 2,
+        "content": "<p>\"Vegetation and permeable surfaces in parks can reduce ambient temperatures by up to 5°C during peak summer months.\"</p>",
+        "page_number": "112",
+        "reference_id": 2,
+        "rating_strength": 4,
+        "rating_reliability": 5
+      },
+      {
+        "id": 3,
+        "content": "<p>\"Residents who participate in community gardening report a stronger sense of community and belonging.\"</p>",
+        "page_number": "88",
+        "reference_id": 3,
+        "rating_strength": 4,
+        "rating_reliability": 3
+      },
+      {
+        "id": 4,
+        "content": "<p>\"A 10% increase in tree canopy cover was linked to a measurable decrease in heat-related illnesses reported in local clinics.\"</p>",
+        "page_number": "203",
+        "reference_id": 2,
+        "rating_strength": 5,
+        "rating_reliability": 4
+      }
+    ],
+    "references": [
+      {
+        "id": 1,
+        "title": "The Psychological Benefits of Nature Exposure",
+        "author": "Dr. Eleanor Vance",
+        "year": 2022,
+        "entry_type": "article",
+        "journal": "Journal of Health Psychology",
+        "publisher": "Sage Publications"
+      },
+      {
+        "id": 2,
+        "title": "Cooling Cities: The Role of Urban Green Infrastructure",
+        "author": "Dr. Marcus Thorne",
+        "year": 2021,
+        "entry_type": "book",
+        "publisher": "Island Press"
+      },
+      {
+        "id": 3,
+        "title": "The Social Fabric of Urban Gardens",
+        "author": "Dr. Anya Sharma",
+        "year": 2023,
+        "entry_type": "article",
+        "journal": "Community Psychology Review"
+      }
+    ],
+    "tags": [
+      { "id": 1, "name": "public-health" },
+      { "id": 2, "name": "environment" },
+      { "id": 3, "name": "community" },
+      { "id": 4, "name": "key-argument" }
+    ],
+    "document_statement": [
+      { "id": 1, "document_id": 1, "statement_id": 1, "order": 0 },
+      { "id": 2, "document_id": 1, "statement_id": 2, "order": 1 },
+      { "id": 3, "document_id": 1, "statement_id": 3, "order": 2 }
+    ],
+    "evidence_statement": [
+      { "id": 1, "evidence_id": 1, "statement_id": 1 },
+      { "id": 2, "evidence_id": 2, "statement_id": 2 },
+      { "id": 3, "evidence_id": 4, "statement_id": 2 },
+      { "id": 4, "evidence_id": 3, "statement_id": 3 }
+    ],
+    "evidence_tag": [
+      { "id": 1, "evidence_id": 1, "tag_id": 1 },
+      { "id": 2, "evidence_id": 1, "tag_id": 4 },
+      { "id": 3, "evidence_id": 2, "tag_id": 2 },
+      { "id": 4, "evidence_id": 3, "tag_id": 3 },
+      { "id": 5, "evidence_id": 4, "tag_id": 2 },
+      { "id": 6, "evidence_id": 4, "tag_id": 4 }
+    ]
+  }
+}

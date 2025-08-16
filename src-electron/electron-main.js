@@ -213,16 +213,17 @@ ipcMain.handle('get-statement-details', async (event, id) => {
 
     const evidence = await db('evidence')
       .join('evidence_statement', 'evidence.id', '=', 'evidence_statement.evidence_id')
+      // --- Add this join to get the reference title ---
+      .join('references', 'evidence.reference_id', '=', 'references.id')
       .where('evidence_statement.statement_id', id)
-      .select('evidence.*');
+      .select('evidence.*', 'references.title as referenceTitle'); // And select the title
 
-    // Add this query to find linked documents
     const documents = await db('documents')
       .join('document_statement', 'documents.id', '=', 'document_statement.document_id')
       .where('document_statement.statement_id', id)
       .select('documents.*');
 
-    return { success: true, statement, evidence, documents }; // Add documents to the return object
+    return { success: true, statement, evidence, documents };
   } catch (e) {
     console.error('Error fetching statement details:', e);
     return { success: false, error: e.message };
@@ -903,14 +904,19 @@ ipcMain.handle('import-shared-document', async () => {
             const newLink = {};
             for (const key in link) {
               if (key.endsWith('_id')) {
-                const table = key.replace('_id', 's'); // e.g., 'document_id' -> 'documents'
+                // --- THIS IS THE CORRECTED LOGIC ---
+                let table = key.replace('_id', 's');
+                if (table === 'evidences') {
+                  table = 'evidence'; // Handle the irregular plural
+                }
+                // ---
                 newLink[key] = idMaps[table][link[key]];
               } else if (key !== 'id') {
                 newLink[key] = link[key];
               }
             }
             return newLink;
-          }).filter(l => Object.values(l).every(val => val !== undefined)); // Ensure all links are valid
+          }).filter(l => Object.values(l).every(val => val !== undefined));
 
           if (linksToInsert.length > 0) {
             await trx(tableName).insert(linksToInsert);
@@ -1004,6 +1010,34 @@ ipcMain.handle('export-document-as-docx', async (event, documentId) => {
 
   } catch (e) {
     console.error('Error exporting document as docx:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+
+// IPC handler for universal search across multiple tables
+ipcMain.handle('universal-search', async (event, searchTerm) => {
+  try {
+    const searchPattern = `%${searchTerm}%`; // Prepare pattern for LIKE query
+
+    const references = await db('references')
+      .where('title', 'like', searchPattern)
+      .orWhere('author', 'like', searchPattern)
+      .orWhere('notes', 'like', searchPattern)
+      .select('*');
+
+    const statements = await db('statements')
+      .where('content', 'like', searchPattern)
+      .select('*');
+
+    const evidence = await db('evidence')
+      .join('references', 'evidence.reference_id', '=', 'references.id')
+      .where('evidence.content', 'like', searchPattern)
+      .select('evidence.*', 'references.title as referenceTitle');
+
+    return { success: true, results: { references, statements, evidence } };
+  } catch (e) {
+    console.error('Error during universal search:', e);
     return { success: false, error: e.message };
   }
 });

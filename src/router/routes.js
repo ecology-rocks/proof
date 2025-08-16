@@ -5,11 +5,12 @@ const routes = [
     children: [
       { path: '', component: () => import('pages/IndexPage.vue') },
       { path: '/statements', component: () => import('pages/StatementsPage.vue') },
-      { path: '/evidence', component: () => import('pages/EvidencePage.vue') }, 
-      { path: '/documents', component: () => import('pages/DocumentsPage.vue') }, 
+      { path: '/evidence', component: () => import('pages/EvidencePage.vue') },
+      { path: '/documents', component: () => import('pages/DocumentsPage.vue') },
       { path: '/statement/:id', component: () => import('pages/StatementDetailPage.vue') },
       { path: '/reference/:id', component: () => import('pages/ReferenceDetailPage.vue') },
       { path: '/document/:id', component: () => import('pages/DocumentDetailPage.vue') },
+      { path: '/search', component: () => import('pages/SearchResultsPage.vue') },
       { path: '/evidence/:id', component: () => import('pages/EvidenceDetailPage.vue') }
     ]
   },

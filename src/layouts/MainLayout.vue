@@ -7,6 +7,12 @@
         <q-toolbar-title>
           Proof
         </q-toolbar-title>
+        <q-input dark dense standout v-model="universalSearchTerm" placeholder="Search All..."
+          @keyup.enter="performSearch" class="q-mr-md">
+          <template v-slot:append>
+            <q-icon name="search" />
+          </template>
+        </q-input>
 
         <div>Quasar v{{ $q.version }}</div>
       </q-toolbar>
@@ -108,9 +114,13 @@
 <script setup>
 import { ref } from 'vue'
 import { useQuasar } from 'quasar'
+import { useRouter } from 'vue-router'
 import EssentialLink from 'components/EssentialLink.vue'
 
 const $q = useQuasar();
+const router = useRouter(); // 2. Get the router instance
+const universalSearchTerm = ref(''); // 3. Add a ref for the search term
+
 const linksList = [
   {
     title: 'Docs',
@@ -198,6 +208,15 @@ async function importShared() {
     $q.notify({ type: 'negative', message: 'An error occurred during import.' });
   }
 }
+
+// 4. Add the function to perform the search
+function performSearch() {
+  if (universalSearchTerm.value.trim()) {
+    router.push(`/search?q=${universalSearchTerm.value}`);
+    universalSearchTerm.value = ''; // Clear the input after searching
+  }
+}
+
 
 const leftDrawerOpen = ref(false)
 

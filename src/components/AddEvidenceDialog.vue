@@ -97,7 +97,9 @@ async function submitForm() {
 
     if (props.evidenceToEdit) {
         // Update existing evidence
-        result = await window.db.updateEvidence({ ...formData.value });
+        const dataToSave = { ...formData.value };
+        delete dataToSave.referenceTitle;
+        result = await window.db.updateEvidence(dataToSave);
         evidenceId = props.evidenceToEdit.id;
     } else {
         // Add new evidence

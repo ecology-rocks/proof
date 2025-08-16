@@ -26,12 +26,17 @@
       </div>
 
       <q-list v-else bordered separator>
-        <q-item v-for="(statement, index) in linkedStatements" :key="statement.id">
+        <q-item v-for="(statement, index) in linkedStatements" :key="statement.id" clickable
+          :to="`/statement/${statement.id}`">
           <q-item-section avatar>
             <q-avatar color="primary" text-color="white">{{ index + 1 }}</q-avatar>
           </q-item-section>
           <q-item-section>
             <q-item-label>{{ statement.content }}</q-item-label>
+          </q-item-section>
+          <!-- Add this button section -->
+          <q-item-section side>
+            <q-btn icon="arrow_forward" flat round color="grey" :to="`/statement/${statement.id}`" />
           </q-item-section>
         </q-item>
       </q-list>

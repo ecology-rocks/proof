@@ -15,32 +15,41 @@
         No evidence has been linked to this statement.
       </div>
 
+      <!-- In StatementDetailPage.vue, replace your q-list with this -->
       <q-list v-else bordered separator>
         <q-item v-for="item in linkedEvidence" :key="item.id">
+          <!-- This section is now a simple container -->
           <q-item-section>
-            <q-item-label class="text-body1">
-              <div v-html="item.content"></div>
-            </q-item-label>
-
-            <q-item-label caption>
-              From: {{ item.referenceTitle || (reference && reference.title) }}
-              <span v-if="item.page_number"> (p. {{ item.page_number }})</span>
-            </q-item-label>
-
-            <div class="row items-center q-mt-xs">
-              <div class="row items-center no-wrap">
-                <span class="text-caption text-grey-7 q-mr-xs">Strength:</span>
-                <q-rating :model-value="item.rating_strength" size="xs" color="amber" icon="star" readonly />
-              </div>
-              <div class="row items-center no-wrap q-ml-md">
-                <span class="text-caption text-grey-7 q-mr-xs">Reliability:</span>
-                <q-rating :model-value="item.rating_reliability" size="xs" color="deep-purple" icon="verified_user"
-                  readonly />
+            <!-- This inner div is now the clickable navigation area -->
+            <div @click="$router.push(`/evidence/${item.id}`)" class="cursor-pointer">
+              <q-item-label class="text-body1">
+                <div v-html="item.content"></div>
+              </q-item-label>
+              <q-item-label caption>
+                From: {{ item.referenceTitle }}
+                <span v-if="item.page_number"> (p. {{ item.page_number }})</span>
+              </q-item-label>
+              <div class="row items-center q-mt-xs">
+                <div class="row items-center no-wrap">
+                  <span class="text-caption text-grey-7 q-mr-xs">Strength:</span>
+                  <q-rating :model-value="item.rating_strength" size="xs" color="amber" icon="star" readonly />
+                </div>
+                <div class="row items-center no-wrap q-ml-md">
+                  <span class="text-caption text-grey-7 q-mr-xs">Reliability:</span>
+                  <q-rating :model-value="item.rating_reliability" size="xs" color="deep-purple" icon="verified_user"
+                    readonly />
+                </div>
               </div>
             </div>
           </q-item-section>
+
+          <!-- This section is now completely separate from the navigation area -->
           <q-item-section side>
-            <q-btn icon="link_off" flat round color="grey" @click="confirmUnlink(item)" />
+            <div class="row">
+              <q-btn icon="edit" flat round color="grey" @click="openEvidenceForm(item)" />
+              <q-btn icon="link_off" flat round color="grey" @click="confirmUnlink(item)" />
+              <q-btn icon="arrow_forward" flat round color="grey" :to="`/evidence/${item.id}`" />
+            </div>
           </q-item-section>
         </q-item>
       </q-list>
@@ -72,26 +81,30 @@
 
     <link-evidence-dialog v-if="statement" v-model="isLinkDialogOpen" :statement-id="statement.id"
       :already-linked-ids="linkedEvidenceIds" @evidence-linked="fetchDetails" />
+    <!-- Add this dialog at the end of your template -->
+    <add-evidence-dialog v-model="isEvidenceFormOpen" :evidence-to-edit="editingEvidence"
+      @form-submitted="fetchDetails" />
   </q-page>
 </template>
 
 <script setup>
 import { ref, onMounted, computed } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { useQuasar } from 'quasar';
 import LinkEvidenceDialog from 'src/components/LinkEvidenceDialog.vue';
+import AddEvidenceDialog from 'src/components/AddEvidenceDialog.vue'; // 1. Import the dialog
 
 const $q = useQuasar();
 const route = useRoute();
-const router = useRouter();
 const statement = ref(null);
 const linkedEvidence = ref([]);
-const linkedDocuments = ref([]); // 1. Add a ref for the documents
+const linkedDocuments = ref([]);
 const isLinkDialogOpen = ref(false);
 
-function goBack() {
-  router.back();
-}
+// --- Add this state for the edit dialog ---
+const isEvidenceFormOpen = ref(false);
+const editingEvidence = ref(null);
+// ---
 
 async function fetchDetails() {
   const statementId = parseInt(route.params.id, 10);
@@ -102,11 +115,16 @@ async function fetchDetails() {
   if (result.success) {
     statement.value = result.statement;
     linkedEvidence.value = result.evidence;
-    linkedDocuments.value = result.documents; // 2. Store the documents
+    linkedDocuments.value = result.documents;
   }
 }
 
-// ... (the rest of the script block remains the same) ...
+// --- Add this function to open the edit dialog ---
+function openEvidenceForm(evidence = null) {
+  editingEvidence.value = evidence;
+  isEvidenceFormOpen.value = true;
+}
+// ---
 
 function linkEvidence() {
   isLinkDialogOpen.value = true;

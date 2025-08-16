@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('db', {
   linkEvidenceToStatement: (linkData) => ipcRenderer.invoke('link-evidence-to-statement', linkData),
   linkStatementsToDocument: (linkData) => ipcRenderer.invoke('link-statements-to-document', linkData),
   mergeFullBackup: () => ipcRenderer.invoke('merge-full-backup'),
+  universalSearch: (term) => ipcRenderer.invoke('universal-search', term),
   unlinkEvidenceFromStatement: (linkData) => ipcRenderer.invoke('unlink-evidence-from-statement', linkData),
   updateDocument: (docData) => ipcRenderer.invoke('update-document', docData),
   updateEvidence: (evidenceData) => ipcRenderer.invoke('update-evidence', evidenceData),
