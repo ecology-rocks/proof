@@ -17,6 +17,8 @@
         <div class="text-h6">Statements</div>
         <q-btn label="Arrange Statements" color="primary" @click="isArrangeDialogOpen = true" />
         <q-btn label="Export to Markdown" icon="download" color="secondary" @click="exportDocument" class="q-ml-sm" />
+        <q-btn label="Export to DOCX" icon="description" color="primary" flat @click="exportAsDocx" class="q-ml-sm" />
+        <q-btn label="Export to Share" icon="share" color="deep-purple" @click="exportForSharing" class="q-ml-sm" />
       </div>
 
       <div v-if="linkedStatements.length === 0" class="text-center text-grey q-mt-lg">
@@ -92,6 +94,39 @@ async function exportDocument() {
   }
 }
 
+async function exportForSharing() {
+  if (!document.value) return;
+  const result = await window.db.exportSharedDocument(document.value.id);
+  if (result.success) {
+    $q.notify({
+      type: 'positive',
+      message: `Document pack saved successfully to ${result.path}`,
+      timeout: 5000
+    });
+  } else if (!result.cancelled) {
+    $q.notify({ type: 'negative', message: 'An error occurred during export.' });
+  }
+}
+
+
+async function exportAsDocx() {
+  if (!document.value) return;
+  $q.notify({ message: 'Generating DOCX file, please wait...', type: 'ongoing', timeout: 2000 });
+  const result = await window.db.exportDocumentAsDocx(document.value.id);
+
+  if (result.success) {
+    $q.notify({
+      type: 'positive',
+      message: `Document exported successfully to ${result.path}`,
+      timeout: 5000
+    });
+  } else if (!result.cancelled) {
+    $q.notify({
+      type: 'negative',
+      message: 'An error occurred during export.'
+    });
+  }
+}
 
 onMounted(() => {
   fetchDetails();

@@ -1,13 +1,16 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
-import fs from 'fs/promises'
-import path from 'node:path'
-import os from 'node:os'
-import { fileURLToPath } from 'node:url'
-import knex from 'knex'
-// In src-electron/electron-main.js
+import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import path from 'path';
+import os from 'os';
+import fs from 'fs/promises';
 import { createRequire } from 'module';
+import { fileURLToPath } from 'url'; // <-- This was the missing import
+import knex from 'knex';
+
+// --- Setup for requiring older libraries ---
 const require = createRequire(import.meta.url);
 const bibtexParse = require('bibtex-parse');
+const { Document, Packer, Paragraph, HeadingLevel, TextRun, AlignmentType, BorderStyle } = require('docx');
+// ---
 
 // Initialize the database
 const db = knex({
@@ -662,6 +665,348 @@ ipcMain.handle('update-evidence-tags', async (event, { evidenceId, tags }) => {
   } catch (e) { console.error('Error updating evidence tags:', e); return { success: false, error: e.message }; }
 });
 
+// IPC handler to export the entire database to a JSON file
+ipcMain.handle('export-full-backup', async () => {
+  try {
+    const tables = [
+      'references', 'evidence', 'statements', 'documents', 'tags',
+      'evidence_tag', 'evidence_statement', 'document_statement'
+    ];
+    const backupData = {
+      version: 1,
+      exportDate: new Date().toISOString(),
+      data: {}
+    };
+
+    for (const table of tables) {
+      backupData.data[table] = await db(table).select('*');
+    }
+
+    const { filePath } = await dialog.showSaveDialog({
+      title: 'Export Full Backup',
+      defaultPath: `proof_backup_${new Date().toISOString().split('T')[0]}.json`,
+      filters: [{ name: 'JSON Files', extensions: ['json'] }]
+    });
+
+    if (filePath) {
+      await fs.writeFile(filePath, JSON.stringify(backupData, null, 2));
+      return { success: true, path: filePath };
+    }
+
+    return { success: false, cancelled: true };
+  } catch (e) {
+    console.error('Error exporting backup:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+// IPC handler to import data from a JSON file, wiping existing data
+ipcMain.handle('import-full-backup', async () => {
+  try {
+    const { filePaths } = await dialog.showOpenDialog({
+      title: 'Import Full Backup',
+      filters: [{ name: 'JSON Files', extensions: ['json'] }],
+      properties: ['openFile']
+    });
+
+    if (!filePaths || filePaths.length === 0) {
+      return { success: false, cancelled: true };
+    }
+
+    const fileContent = await fs.readFile(filePaths[0], 'utf8');
+    const backupData = JSON.parse(fileContent);
+
+    // The order of tables matters due to foreign keys.
+    // Delete from child tables first, then parent tables.
+    const tablesToDelete = [
+      'document_statement', 'evidence_statement', 'evidence_tag',
+      'tags', 'documents', 'evidence', 'statements', 'references'
+    ];
+    // Insert into parent tables first, then child tables.
+    const tablesToInsert = [
+      'references', 'statements', 'evidence', 'documents', 'tags',
+      'evidence_tag', 'evidence_statement', 'document_statement'
+    ];
+
+    await db.transaction(async (trx) => {
+      // Temporarily disable foreign key checks for the transaction
+      await trx.raw('PRAGMA foreign_keys = OFF');
+
+      for (const table of tablesToDelete) {
+        await trx(table).del();
+      }
+
+      // Reset autoincrement counters for sqlite
+      await trx('sqlite_sequence').del();
+
+      for (const table of tablesToInsert) {
+        if (backupData.data[table] && backupData.data[table].length > 0) {
+          await trx(table).insert(backupData.data[table]);
+        }
+      }
+
+      // Re-enable foreign key checks
+      await trx.raw('PRAGMA foreign_keys = ON');
+    });
+
+    return { success: true, count: backupData.data.references.length };
+  } catch (e) {
+    console.error('Error importing backup:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+// IPC handler to merge data from a JSON file without wiping existing data
+ipcMain.handle('merge-full-backup', async () => {
+  try {
+    const { filePaths } = await dialog.showOpenDialog({
+      title: 'Merge from Backup',
+      filters: [{ name: 'JSON Files', extensions: ['json'] }],
+      properties: ['openFile']
+    });
+
+    if (!filePaths || filePaths.length === 0) {
+      return { success: false, cancelled: true };
+    }
+
+    const fileContent = await fs.readFile(filePaths[0], 'utf8');
+    const backupData = JSON.parse(fileContent);
+
+    // We only import the core data tables, not the relationship tables.
+    const tablesToMerge = ['references', 'statements', 'evidence', 'documents', 'tags'];
+    let totalImported = 0;
+
+    await db.transaction(async (trx) => {
+      for (const table of tablesToMerge) {
+        if (backupData.data[table] && backupData.data[table].length > 0) {
+          // Remove IDs and timestamps to allow the database to assign new ones
+          const cleanedData = backupData.data[table].map(item => {
+            delete item.id;
+            delete item.created_at;
+            delete item.updated_at;
+            return item;
+          });
+          await trx(table).insert(cleanedData);
+          totalImported += cleanedData.length;
+        }
+      }
+    });
+
+    return { success: true, count: totalImported };
+  } catch (e) {
+    console.error('Error merging backup:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+// IPC handler to export a single document and all its related data
+ipcMain.handle('export-shared-document', async (event, documentId) => {
+  try {
+    const document = await db('documents').where('id', documentId).first();
+    if (!document) throw new Error('Document not found');
+
+    // Get IDs of all statements in the document
+    const statementLinks = await db('document_statement').where('document_id', documentId);
+    const statementIds = statementLinks.map(l => l.statement_id);
+
+    // Get IDs of all evidence linked to those statements
+    const evidenceLinks = await db('evidence_statement').whereIn('statement_id', statementIds);
+    const evidenceIds = [...new Set(evidenceLinks.map(l => l.evidence_id))]; // Use Set to get unique IDs
+
+    // Get IDs of all references linked to that evidence
+    const evidenceParents = await db('evidence').whereIn('id', evidenceIds).select('reference_id');
+    const referenceIds = [...new Set(evidenceParents.map(e => e.reference_id))];
+
+    // Get IDs of all tags linked to that evidence
+    const tagLinks = await db('evidence_tag').whereIn('evidence_id', evidenceIds);
+    const tagIds = [...new Set(tagLinks.map(l => l.tag_id))];
+
+    // Now fetch the full data for all the unique IDs we found
+    const backupData = {
+      type: 'ProofSharedDocument',
+      version: 1,
+      exportDate: new Date().toISOString(),
+      data: {
+        documents: [document],
+        statements: await db('statements').whereIn('id', statementIds),
+        evidence: await db('evidence').whereIn('id', evidenceIds),
+        references: await db('references').whereIn('id', referenceIds),
+        tags: await db('tags').whereIn('id', tagIds),
+        document_statement: statementLinks,
+        evidence_statement: evidenceLinks,
+        evidence_tag: tagLinks
+      }
+    };
+
+    const { filePath } = await dialog.showSaveDialog({
+      title: 'Export Shared Document',
+      defaultPath: `${document.title.replace(/ /g, '_')}.proofshare.json`,
+      filters: [{ name: 'Proof Shareable Document', extensions: ['json'] }]
+    });
+
+    if (filePath) {
+      await fs.writeFile(filePath, JSON.stringify(backupData, null, 2));
+      return { success: true, path: filePath };
+    }
+
+    return { success: false, cancelled: true };
+  } catch (e) {
+    console.error('Error exporting shared document:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+// IPC handler to import a shared document pack non-destructively
+ipcMain.handle('import-shared-document', async () => {
+  try {
+    const { filePaths } = await dialog.showOpenDialog({
+      title: 'Import Shared Document',
+      filters: [{ name: 'Proof Shareable Document', extensions: ['json'] }],
+      properties: ['openFile']
+    });
+
+    if (!filePaths || filePaths.length === 0) {
+      return { success: false, cancelled: true };
+    }
+
+    const fileContent = await fs.readFile(filePaths[0], 'utf8');
+    const backupData = JSON.parse(fileContent);
+
+    if (backupData.type !== 'ProofSharedDocument') {
+      throw new Error('This is not a valid Proof shareable document file.');
+    }
+
+    const idMaps = {
+      references: {}, statements: {}, evidence: {}, documents: {}, tags: {}
+    };
+
+    await db.transaction(async (trx) => {
+      // Step 1: Insert primary items and create ID maps
+      for (const tableName of Object.keys(idMaps)) {
+        if (backupData.data[tableName]) {
+          for (const item of backupData.data[tableName]) {
+            const oldId = item.id;
+            delete item.id;
+            delete item.created_at;
+            delete item.updated_at;
+            const [newId] = await trx(tableName).insert(item);
+            idMaps[tableName][oldId] = newId;
+          }
+        }
+      }
+
+      // Step 2: Re-link relationships using the ID maps
+      const joinTables = ['document_statement', 'evidence_statement', 'evidence_tag'];
+      for (const tableName of joinTables) {
+        if (backupData.data[tableName]) {
+          const linksToInsert = backupData.data[tableName].map(link => {
+            const newLink = {};
+            for (const key in link) {
+              if (key.endsWith('_id')) {
+                const table = key.replace('_id', 's'); // e.g., 'document_id' -> 'documents'
+                newLink[key] = idMaps[table][link[key]];
+              } else if (key !== 'id') {
+                newLink[key] = link[key];
+              }
+            }
+            return newLink;
+          }).filter(l => Object.values(l).every(val => val !== undefined)); // Ensure all links are valid
+
+          if (linksToInsert.length > 0) {
+            await trx(tableName).insert(linksToInsert);
+          }
+        }
+      }
+    });
+
+    return { success: true, count: backupData.data.documents.length };
+  } catch (e) {
+    console.error('Error importing shared document:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+
+// IPC handler to generate a .docx file and save it
+ipcMain.handle('export-document-as-docx', async (event, documentId) => {
+  try {
+    // 1. Fetch all the necessary data (same as Markdown export)
+    const documentData = await db('documents').where('id', documentId).first();
+    if (!documentData) throw new Error('Document not found');
+
+    const statements = await db('statements')
+      .join('document_statement', 'statements.id', '=', 'document_statement.statement_id')
+      .where('document_statement.document_id', documentId)
+      .select('statements.*')
+      .orderBy('document_statement.order', 'asc');
+
+    const children = [];
+
+    // 2. Build the document structure using the docx library
+    // Document Title
+    children.push(new Paragraph({ text: documentData.title, heading: HeadingLevel.TITLE }));
+
+    // Excerpt
+    if (documentData.excerpt) {
+      children.push(new Paragraph({ children: [new TextRun({ text: documentData.excerpt, italics: true })], alignment: AlignmentType.CENTER }));
+    }
+    children.push(new Paragraph({ text: "" })); // Spacer
+
+    // Loop through statements and their evidence
+    for (const statement of statements) {
+      children.push(new Paragraph({ text: statement.content, heading: HeadingLevel.HEADING_2 }));
+      children.push(new Paragraph({ text: "Supporting Evidence", heading: HeadingLevel.HEADING_3 }));
+
+      const evidence = await db('evidence')
+        .join('evidence_statement', 'evidence.id', '=', 'evidence_statement.evidence_id')
+        .join('references', 'evidence.reference_id', '=', 'references.id')
+        .where('evidence_statement.statement_id', statement.id)
+        .select('evidence.content', 'evidence.page_number', 'references.title as referenceTitle');
+
+      if (evidence.length === 0) {
+        children.push(new Paragraph({ children: [new TextRun({ text: "No evidence linked.", italics: true })] }));
+      } else {
+        for (const ev of evidence) {
+          const sourceText = `— From: ${ev.referenceTitle}${ev.page_number ? ` (p. ${ev.page_number})` : ''}`;
+          // The docx library needs HTML to be stripped or handled differently.
+          // For simplicity, we'll strip HTML tags.
+          const cleanContent = ev.content.replace(/<[^>]*>?/gm, '');
+
+          children.push(new Paragraph({
+            text: `"${cleanContent}"`,
+            style: "wellSpaced",
+            border: { left: { style: BorderStyle.SINGLE, size: 4, color: "auto" } },
+            indent: { left: 720 }, // 720 TWIPs = 0.5 inch
+          }));
+          children.push(new Paragraph({ children: [new TextRun({ text: sourceText, italics: true })], alignment: AlignmentType.RIGHT }));
+          children.push(new Paragraph({ text: "" })); // Spacer
+        }
+      }
+    }
+
+    const doc = new Document({ sections: [{ children }] });
+
+    // 3. Generate the file buffer
+    const buffer = await Packer.toBuffer(doc);
+
+    const { filePath } = await dialog.showSaveDialog({
+      title: 'Export Document as DOCX',
+      defaultPath: `${documentData.title.replace(/ /g, '_')}.docx`,
+      filters: [{ name: 'Word Documents', extensions: ['docx'] }]
+    });
+
+    if (filePath) {
+      await fs.writeFile(filePath, buffer);
+      return { success: true, path: filePath };
+    }
+
+    return { success: false, cancelled: true };
+
+  } catch (e) {
+    console.error('Error exporting document as docx:', e);
+    return { success: false, error: e.message };
+  }
+});
 
 // add new IPC handlers above this line
 // needed in case process is undefined under Linux
