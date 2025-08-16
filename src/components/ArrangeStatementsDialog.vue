@@ -6,15 +6,26 @@
             </q-card-section>
 
             <q-card-section class="q-pt-none row">
-                <div class="col-6 q-pa-sm">
+                <div class="col-6 q-pa-sm column">
                     <div class="text-subtitle1">Available Statements</div>
-                    <q-list bordered separator>
+                    <q-list bordered separator class="col">
                         <q-item v-for="statement in availableStatements" :key="statement.id" clickable
                             @click="addStatement(statement)">
                             <q-item-section>{{ statement.content }}</q-item-section>
                             <q-item-section side><q-icon name="add_circle" color="positive" /></q-item-section>
                         </q-item>
                     </q-list>
+
+                    <q-card-section>
+                        <div class="text-subtitle1">Create New Statement</div>
+                        <q-input v-model="newStatementContent" label="New statement content..." outlined dense
+                            @keyup.enter="createStatementAndAdd">
+                            <template v-slot:append>
+                                <q-btn round dense flat icon="add_circle" color="primary"
+                                    @click="createStatementAndAdd" />
+                            </template>
+                        </q-input>
+                    </q-card-section>
                 </div>
 
                 <div class="col-6 q-pa-sm">
@@ -54,7 +65,24 @@ const selectedStatements = ref([]);
 const availableStatements = ref([]);
 let sortable = null;
 
-// Filter available statements based on what's already selected
+// --- Add this section for the new statement input ---
+const newStatementContent = ref('');
+
+async function createStatementAndAdd() {
+    if (!newStatementContent.value.trim()) return;
+
+    const result = await window.db.addStatement({ content: newStatementContent.value });
+
+    if (result.success && result.statement) {
+        // Add the new statement to our master list and the selected list
+        allStatements.value.unshift(result.statement);
+        addStatement(result.statement);
+        // Clear the input field
+        newStatementContent.value = '';
+    }
+}
+// ---
+
 function updateAvailableStatements() {
     const selectedIds = new Set(selectedStatements.value.map(s => s.id));
     availableStatements.value = allStatements.value.filter(s => !selectedIds.has(s.id));
@@ -85,7 +113,6 @@ async function saveArrangement() {
     }
 }
 
-// Initialize SortableJS when the list is ready
 function initializeDragAndDrop() {
     const listEl = document.querySelector('.draggable-list');
     if (listEl) {
@@ -108,12 +135,10 @@ onMounted(async () => {
     }
 });
 
-// Watch for the dialog opening to initialize and set data
 watch(() => props.modelValue, (isNowVisible) => {
     if (isNowVisible) {
         selectedStatements.value = [...props.alreadyLinkedStatements];
         updateAvailableStatements();
-        // Use nextTick to ensure the DOM is updated before initializing SortableJS
         import('vue').then(vue => {
             vue.nextTick(() => {
                 initializeDragAndDrop();
