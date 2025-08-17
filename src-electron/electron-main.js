@@ -1042,6 +1042,143 @@ ipcMain.handle('universal-search', async (event, searchTerm) => {
   }
 });
 
+// IPC handler for advanced evidence filtering and sorting
+ipcMain.handle('get-filtered-evidence', async (event, { searchTerm, sortBy, filterTagId, minStrength, minReliability }) => {
+  try {
+    let query = db('evidence')
+      .join('references', 'evidence.reference_id', '=', 'references.id')
+      .select(
+        'evidence.id', 'evidence.content', 'evidence.page_number',
+        'evidence.rating_strength', 'evidence.rating_reliability',
+        'references.title as referenceTitle'
+      );
+
+    // Apply text search filter
+    if (searchTerm) {
+      const searchPattern = `%${searchTerm}%`;
+      query = query.where(function () {
+        this.where('evidence.content', 'like', searchPattern)
+          .orWhere('references.title', 'like', searchPattern);
+      });
+    }
+
+    // Apply tag filter
+    if (filterTagId) {
+      query = query
+        .join('evidence_tag', 'evidence.id', '=', 'evidence_tag.evidence_id')
+        .where('evidence_tag.tag_id', filterTagId);
+    }
+
+    // Apply rating filters
+    if (minStrength > 0) {
+      query = query.where('evidence.rating_strength', '>=', minStrength);
+    }
+    if (minReliability > 0) {
+      query = query.where('evidence.rating_reliability', '>=', minReliability);
+    }
+
+    // Apply sorting
+    switch (sortBy) {
+      case 'strength':
+        query = query.orderBy('evidence.rating_strength', 'desc');
+        break;
+      case 'reliability':
+        query = query.orderBy('evidence.rating_reliability', 'desc');
+        break;
+      case 'oldest':
+        query = query.orderBy('evidence.created_at', 'asc');
+        break;
+      default: // 'newest'
+        query = query.orderBy('evidence.created_at', 'desc');
+        break;
+    }
+
+    const evidence = await query;
+    return { success: true, evidence };
+  } catch (e) {
+    console.error('Error fetching filtered evidence:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+// IPC handler for advanced reference filtering and sorting
+ipcMain.handle('get-filtered-references', async (event, { searchTerm, sortBy, filterType }) => {
+  try {
+    let query = db('references').select('*');
+
+    // Apply text search filter
+    if (searchTerm) {
+      const searchPattern = `%${searchTerm}%`;
+      query = query.where(function () {
+        this.where('title', 'like', searchPattern)
+          .orWhere('author', 'like', searchPattern)
+          .orWhere('notes', 'like', searchPattern);
+      });
+    }
+
+    // Apply entry type filter
+    if (filterType) {
+      query = query.where('entry_type', 'like', `%${filterType}%`);
+    }
+
+    // Apply sorting
+    switch (sortBy) {
+      case 'year_asc':
+        query = query.orderBy('year', 'asc');
+        break;
+      case 'year_desc':
+        query = query.orderBy('year', 'desc');
+        break;
+      case 'title':
+        query = query.orderBy('title', 'asc');
+        break;
+      default: // 'newest'
+        query = query.orderBy('created_at', 'desc');
+        break;
+    }
+
+    const references = await query;
+    return { success: true, references };
+  } catch (e) {
+    console.error('Error fetching filtered references:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+// IPC handler for advanced statement filtering and sorting
+ipcMain.handle('get-filtered-statements', async (event, { searchTerm, sortBy }) => {
+  try {
+    let query = db('statements').select('*');
+
+    // Apply text search filter
+    if (searchTerm) {
+      query = query.where('content', 'like', `%${searchTerm}%`);
+    }
+
+    // Apply sorting
+    switch (sortBy) {
+      case 'oldest':
+        query = query.orderBy('created_at', 'asc');
+        break;
+      case 'content':
+        query = query.orderBy('content', 'asc');
+        break;
+      default: // 'newest'
+        query = query.orderBy('created_at', 'desc');
+        break;
+    }
+
+    const statements = await query;
+    return { success: true, statements };
+  } catch (e) {
+    console.error('Error fetching filtered statements:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+
+
+
 // add new IPC handlers above this line
 // needed in case process is undefined under Linux
 const platform = process.platform || os.platform()
