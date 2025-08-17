@@ -7,6 +7,8 @@
         <q-toolbar-title>
           Proof
         </q-toolbar-title>
+        <q-toggle :model-value="$q.dark.isActive" @update:model-value="val => $q.dark.set(val)" checked-icon="dark_mode"
+          unchecked-icon="light_mode" size="lg" color="yellow" />
         <q-input dark dense standout v-model="universalSearchTerm" placeholder="Search All..."
           @keyup.enter="performSearch" class="q-mr-md">
           <template v-slot:append>
@@ -20,7 +22,7 @@
 
     <q-drawer v-model="leftDrawerOpen" show-if-above bordered>
       <q-list>
-        <q-item clickable to="/">
+        <q-item clickable to="/" exact>
           <q-item-section avatar>
             <q-icon name="source" />
           </q-item-section>
@@ -112,7 +114,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { useRouter } from 'vue-router'
 import EssentialLink from 'components/EssentialLink.vue'
@@ -120,6 +122,15 @@ import EssentialLink from 'components/EssentialLink.vue'
 const $q = useQuasar();
 const router = useRouter(); // 2. Get the router instance
 const universalSearchTerm = ref(''); // 3. Add a ref for the search term
+
+onMounted(() => {
+  const isDark = localStorage.getItem('darkMode') === 'true';
+  $q.dark.set(isDark);
+});
+
+watch(() => $q.dark.isActive, (isDark) => {
+  localStorage.setItem('darkMode', isDark);
+});
 
 const linksList = [
   {
