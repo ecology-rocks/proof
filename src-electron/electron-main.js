@@ -131,6 +131,16 @@ async function setupDatabase() {
       console.log("Created 'evidence_tag' join table.");
     }
 
+    const hasStatementLinks = await db.schema.hasTable('statement_links');
+    if (!hasStatementLinks) {
+      await db.schema.createTable('statement_links', table => {
+        table.increments('id').primary();
+        table.integer('source_statement_id').unsigned().references('id').inTable('statements').onDelete('CASCADE');
+        table.integer('target_statement_id').unsigned().references('id').inTable('statements').onDelete('CASCADE');
+        table.string('label').defaultTo('Related to'); // e.g., 'supports', 'contradicts'
+      });
+      console.log("Created 'statement_links' table.");
+    }
 
     /// add new database tables above this line
   } catch (e) {
@@ -163,12 +173,18 @@ ipcMain.handle('add-reference', async (event, referenceData) => {
 ipcMain.handle('get-reference-details', async (event, id) => {
   try {
     const reference = await db('references').where('id', id).first();
-    const evidence = await db('evidence').where('reference_id', id);
+    let evidence = await db('evidence').where('reference_id', id);
+
+    for (const ev of evidence) {
+      const tags = await db('tags')
+        .join('evidence_tag', 'tags.id', '=', 'evidence_tag.tag_id')
+        .where('evidence_tag.evidence_id', ev.id)
+        .select('tags.name');
+      ev.tags = tags.map(t => t.name);
+    }
+
     return { success: true, reference, evidence };
-  } catch (e) {
-    console.error('Error fetching reference details:', e);
-    return { success: false, error: e.message };
-  }
+  } catch (e) { console.error('Error fetching reference details:', e); return { success: false, error: e.message }; }
 });
 
 // IPC handler to add new evidence
@@ -206,17 +222,23 @@ ipcMain.handle('add-statement', async (event, statementData) => {
   }
 });
 
-// Replace the old 'get-statement-details' handler with this one
+// IPC handler to get a single statement and its linked evidence
 ipcMain.handle('get-statement-details', async (event, id) => {
   try {
     const statement = await db('statements').where('id', id).first();
-
-    const evidence = await db('evidence')
+    let evidence = await db('evidence')
       .join('evidence_statement', 'evidence.id', '=', 'evidence_statement.evidence_id')
-      // --- Add this join to get the reference title ---
       .join('references', 'evidence.reference_id', '=', 'references.id')
       .where('evidence_statement.statement_id', id)
-      .select('evidence.*', 'references.title as referenceTitle'); // And select the title
+      .select('evidence.*', 'references.title as referenceTitle');
+
+    for (const ev of evidence) {
+      const tags = await db('tags')
+        .join('evidence_tag', 'tags.id', '=', 'evidence_tag.tag_id')
+        .where('evidence_tag.evidence_id', ev.id)
+        .select('tags.name');
+      ev.tags = tags.map(t => t.name);
+    }
 
     const documents = await db('documents')
       .join('document_statement', 'documents.id', '=', 'document_statement.document_id')
@@ -224,10 +246,7 @@ ipcMain.handle('get-statement-details', async (event, id) => {
       .select('documents.*');
 
     return { success: true, statement, evidence, documents };
-  } catch (e) {
-    console.error('Error fetching statement details:', e);
-    return { success: false, error: e.message };
-  }
+  } catch (e) { console.error('Error fetching statement details:', e); return { success: false, error: e.message }; }
 });
 
 // Replace the old 'get-all-evidence' handler with this one
@@ -455,10 +474,7 @@ ipcMain.handle('get-evidence-details', async (event, id) => {
     const evidence = await db('evidence')
       .join('references', 'evidence.reference_id', '=', 'references.id')
       .where('evidence.id', id)
-      .select(
-        'evidence.*',
-        'references.title as referenceTitle'
-      )
+      .select('evidence.*', 'references.title as referenceTitle')
       .first();
 
     const statements = await db('statements')
@@ -466,11 +482,14 @@ ipcMain.handle('get-evidence-details', async (event, id) => {
       .where('evidence_statement.evidence_id', id)
       .select('statements.*');
 
+    const tags = await db('tags')
+      .join('evidence_tag', 'tags.id', '=', 'evidence_tag.tag_id')
+      .where('evidence_tag.evidence_id', id)
+      .select('tags.name');
+    evidence.tags = tags.map(t => t.name);
+
     return { success: true, evidence, statements };
-  } catch (e) {
-    console.error('Error fetching evidence details:', e);
-    return { success: false, error: e.message };
-  }
+  } catch (e) { console.error('Error fetching evidence details:', e); return { success: false, error: e.message }; }
 });
 
 // IPC handler to update a document's title and excerpt
@@ -1047,11 +1066,15 @@ ipcMain.handle('get-filtered-evidence', async (event, { searchTerm, sortBy, filt
   try {
     let query = db('evidence')
       .join('references', 'evidence.reference_id', '=', 'references.id')
+      .leftJoin('evidence_tag', 'evidence.id', '=', 'evidence_tag.evidence_id')
+      .leftJoin('tags', 'evidence_tag.tag_id', '=', 'tags.id')
       .select(
         'evidence.id', 'evidence.content', 'evidence.page_number',
         'evidence.rating_strength', 'evidence.rating_reliability',
         'references.title as referenceTitle'
-      );
+      )
+      .groupBy('evidence.id')
+      .select(db.raw("GROUP_CONCAT(tags.name) as tags"));
 
     // Apply text search filter
     if (searchTerm) {
@@ -1065,8 +1088,8 @@ ipcMain.handle('get-filtered-evidence', async (event, { searchTerm, sortBy, filt
     // Apply tag filter
     if (filterTagId) {
       query = query
-        .join('evidence_tag', 'evidence.id', '=', 'evidence_tag.evidence_id')
-        .where('evidence_tag.tag_id', filterTagId);
+        .join('evidence_tag as et_filter', 'evidence.id', '=', 'et_filter.evidence_id')
+        .where('et_filter.tag_id', filterTagId);
     }
 
     // Apply rating filters
@@ -1094,6 +1117,11 @@ ipcMain.handle('get-filtered-evidence', async (event, { searchTerm, sortBy, filt
     }
 
     const evidence = await query;
+    // Process the comma-separated tags string into an array
+    evidence.forEach(ev => {
+      ev.tags = ev.tags ? ev.tags.split(',') : [];
+    });
+
     return { success: true, evidence };
   } catch (e) {
     console.error('Error fetching filtered evidence:', e);
@@ -1177,7 +1205,67 @@ ipcMain.handle('get-filtered-statements', async (event, { searchTerm, sortBy }) 
 });
 
 
+// IPC handler to get all links for a given statement
+ipcMain.handle('get-statement-links', async (event, statementId) => {
+  try {
+    const links = await db('statement_links')
+      .join('statements', 'statement_links.target_statement_id', '=', 'statements.id')
+      .where('statement_links.source_statement_id', statementId)
+      .select('statements.id', 'statements.content', 'statement_links.label');
+    return { success: true, links };
+  } catch (e) { console.error('Error fetching statement links:', e); return { success: false, error: e.message }; }
+});
 
+// Replace the old update-statement-links handler with this one
+ipcMain.handle('update-statement-links', async (event, { sourceStatementId, links }) => {
+  try {
+    await db.transaction(async (trx) => {
+      // 1. Remove all existing links originating from this statement
+      await trx('statement_links').where('source_statement_id', sourceStatementId).del();
+      // Also remove any links pointing back to this statement from the ones we are about to link
+      const targetIds = links.map(l => l.id);
+      if (targetIds.length > 0) {
+        await trx('statement_links').whereIn('source_statement_id', targetIds).andWhere('target_statement_id', sourceStatementId).del();
+      }
+
+      // 2. Insert the new links (both ways)
+      if (links && links.length > 0) {
+        const linksToInsert = [];
+        links.forEach(link => {
+          // A -> B
+          linksToInsert.push({
+            source_statement_id: sourceStatementId,
+            target_statement_id: link.id,
+            label: link.label || 'Related to'
+          });
+          // B -> A
+          linksToInsert.push({
+            source_statement_id: link.id,
+            target_statement_id: sourceStatementId,
+            label: link.label || 'Related to'
+          });
+        });
+        await trx('statement_links').insert(linksToInsert);
+      }
+    });
+    return { success: true };
+  } catch (e) { console.error('Error updating statement links:', e); return { success: false, error: e.message }; }
+});
+
+
+// Add this new IPC handler
+ipcMain.handle('unlink-statement-link', async (event, { sourceId, targetId }) => {
+  try {
+    await db('statement_links').where({
+      source_statement_id: sourceId,
+      target_statement_id: targetId
+    }).orWhere({
+      source_statement_id: targetId,
+      target_statement_id: sourceId
+    }).del();
+    return { success: true };
+  } catch (e) { console.error('Error unlinking statement:', e); return { success: false, error: e.message }; }
+});
 
 // add new IPC handlers above this line
 // needed in case process is undefined under Linux

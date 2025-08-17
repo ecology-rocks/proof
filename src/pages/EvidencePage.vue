@@ -60,6 +60,12 @@
               <q-rating :model-value="item.rating_reliability" size="xs" color="deep-purple" icon="verified_user"
                 readonly />
             </div>
+            <!-- Add this tag display block -->
+            <div v-if="item.tags && item.tags.length" class="q-mt-sm q-gutter-xs">
+              <q-chip v-for="tag in item.tags" :key="tag" dense outline color="grey-7" size="sm">
+                {{ tag }}
+              </q-chip>
+            </div>
           </div>
         </q-item-section>
         <q-item-section side>

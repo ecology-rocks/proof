@@ -17,6 +17,14 @@
             readonly />
         </div>
       </div>
+      <div v-if="evidence.tags && evidence.tags.length" class="q-mb-md">
+        <div class="text-subtitle2 text-grey">Tags</div>
+        <div class="q-gutter-sm">
+          <q-chip v-for="tag in evidence.tags" :key="tag" color="primary" text-color="white">
+            {{ tag }}
+          </q-chip>
+        </div>
+      </div>
 
       <div class="q-mb-xl">
         <div class="text-subtitle2 text-grey">Source Reference:</div>
